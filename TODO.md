@@ -1,0 +1,9 @@
+- TESTS
+- table search UI
+- roll table refs
+- evaluate row text
+  - placeholders
+  - variables
+- nested results state
+- nested results UI (i.e. table refs)
+- reroll result (cascading???)
