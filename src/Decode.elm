@@ -54,14 +54,9 @@ type YamlRow
     | MetaRow TableRef
 
 
-type YamlTableDice
-    = ExplicitDice Expr
-    | InferredDice
-
-
 type alias YamlTable =
     { title : String
-    , dice : YamlTableDice
+    , dice : Expr
     , rows : List YamlRow
     }
 
@@ -89,32 +84,22 @@ decoder =
     map3
         YamlTable
         (field "title" string)
-        (map
-            (\maybeStr ->
-                case maybeStr of
-                    Nothing ->
-                        Ok InferredDice
-
-                    Just str ->
-                        case Parser.run expression str of
-                            Ok expr ->
-                                Ok (ExplicitDice expr)
-
-                            Err e ->
-                                Err ("Parsing dice failed" ++ Debug.toString e)
-            )
-            (maybe (field "dice" string))
+        (maybe (field "dice" string)
             |> andThen
-                (\res ->
-                    case res of
-                        Err e ->
-                            fail e
+                (\maybeStr ->
+                    case maybeStr of
+                        Nothing ->
+                            map diceFromRowList (field "rows" (list string))
 
-                        Ok d ->
-                            succeed d
+                        Just str ->
+                            case Parser.run expression str of
+                                Err e ->
+                                    fail ("Parsing dice failed: " ++ Debug.toString e)
+
+                                Ok d ->
+                                    succeed d
                 )
         )
-        -- (succeed [])
         (field "rows"
             (list rowDecoder)
         )
@@ -174,13 +159,7 @@ finalize table =
     Table
         (finalizeRows table.rows)
         table.title
-        (case table.dice of
-            ExplicitDice d ->
-                d
-
-            InferredDice ->
-                diceFromRowList table.rows
-        )
+        table.dice
 
 
 type alias RowParseResult =
