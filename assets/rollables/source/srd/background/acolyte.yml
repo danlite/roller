@@ -1,0 +1,8 @@
+title: Acolyte
+tables:
+  - path: $/personality-trait
+    rollCount: 2
+    unique: true
+  - path: $/ideal
+  - path: $/bond
+  - path: $/flaw

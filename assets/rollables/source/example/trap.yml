@@ -1,0 +1,23 @@
+title: Random Trap
+rows:
+  - A trap that causes short-term madness
+  - path: /srd/difficulty-class
+    title: Trap Difficulty
+  - path: /srd/madness/short-term
+  - A trap that causes long-term madness
+  - path: /srd/difficulty-class
+    title: Trap Difficulty
+  - path: /srd/madness/long-term
+  - A trap that causes indefinite madness
+  - path: /srd/difficulty-class
+    title: Trap Difficulty
+  - path: /srd/madness/indefinite
+  - A trap that deals damage
+  - path: /srd/difficulty-class
+    title: Trap Difficulty
+  - path: /srd/damage-type
+  - A trap with a spell-like effect
+  - path: /srd/difficulty-class
+    title: Trap Difficulty
+  - path: ./trap-spell
+    title: Spell

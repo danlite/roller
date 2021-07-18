@@ -1,0 +1,15 @@
+title: Barnyard Encounter
+dice: d10
+rows:
+  - 1|1 partridge eating a pear
+  - 2-3|2 [[red (30%)]] or [[green (70%)]] winged turtles
+  - 4-5|3 dwarvish hens
+  - 6-7|[[@birds:2d4]] birds with a series of messages to deliver, as if under the animal messenger spell
+  - 8|A lost traveller looking for directions
+  - path: ./npc
+  - 9|A well-stocked workshop with [[@tools:1d2+1]] sets of artisan's tools
+  - path: /srd/equipment/tool/artisan
+    rollCount: tools
+    unique: true
+  - 10|A well-concealed trap
+  - path: ./trap

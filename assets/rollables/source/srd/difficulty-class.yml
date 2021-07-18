@@ -1,0 +1,9 @@
+title: Task Difficulty
+dice: d20
+rows:
+  - 1|Very easy (DC 5)
+  - 2-4|Easy (DC 10)
+  - 5-12|Medium (DC 15)
+  - 13-16|Hard (DC 20)
+  - 17-19|Very hard (DC 25)
+  - 20|Nearly impossible (DC 30)
