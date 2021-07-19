@@ -39,7 +39,7 @@ decodeTableHttpResult path result =
                 Err err
 
             Ok yamlStr ->
-                Ok (Yaml.Decode.fromString (Yaml.Decode.map Decode.finalize decoder) yamlStr)
+                Ok (Yaml.Decode.fromString (Yaml.Decode.map Decode.finalize (decoder path)) yamlStr)
         )
 
 

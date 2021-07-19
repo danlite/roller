@@ -1,4 +1,4 @@
-module Msg exposing (InputField(..), Msg(..))
+module Msg exposing (InputField(..), Msg(..), TableLoadResult)
 
 import Dice exposing (RolledFormulaTerm, RolledTable, Table)
 import Http
@@ -11,6 +11,10 @@ type InputField
     | Dice
 
 
+type alias TableLoadResult =
+    Result Http.Error (Result Yaml.Decode.Error Table)
+
+
 type Msg
     = Roll
     | NewResults RolledFormulaTerm
@@ -18,4 +22,5 @@ type Msg
     | Change InputField String
     | GotDirectory (Result Http.Error (List String))
     | LoadTable String
-    | LoadedTable String (Result Http.Error (Result Yaml.Decode.Error Table))
+    | LoadedTable String TableLoadResult
+    | InputTableSearch String

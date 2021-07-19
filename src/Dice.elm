@@ -146,7 +146,7 @@ type alias Row =
 
 
 type alias Table =
-    { rows : List Row, title : String, dice : Expr }
+    { path : String, rows : List Row, title : String, dice : Expr }
 
 
 type Variable

@@ -3,7 +3,7 @@ module Decode exposing (..)
 import Dice exposing (Expr(..), FormulaTerm(..), Row, Table, TableRef, Variable(..), makeSingleRange)
 import Parse exposing (ParsedRow(..), expression, formulaTerm, row)
 import Parser
-import Yaml.Decode exposing (Decoder, Error, andMap, andThen, bool, fail, field, list, map, map3, maybe, oneOf, string, succeed)
+import Yaml.Decode exposing (Decoder, Error, andMap, andThen, bool, fail, field, list, map, map3, map4, maybe, oneOf, string, succeed)
 
 
 listWrapDecoder : Decoder v -> Decoder (List v)
@@ -55,7 +55,8 @@ type YamlRow
 
 
 type alias YamlTable =
-    { title : String
+    { path : String
+    , title : String
     , dice : Expr
     , rows : List YamlRow
     }
@@ -79,10 +80,11 @@ diceFromRowList rows =
     Term (MultiDie { count = 1, sides = List.length rows })
 
 
-decoder : Yaml.Decode.Decoder YamlTable
-decoder =
-    map3
+decoder : String -> Yaml.Decode.Decoder YamlTable
+decoder path =
+    map4
         YamlTable
+        (succeed path)
         (field "title" string)
         (maybe (field "dice" string)
             |> andThen
@@ -157,6 +159,7 @@ finalizeRows rows =
 finalize : YamlTable -> Table
 finalize table =
     Table
+        table.path
         (finalizeRows table.rows)
         table.title
         table.dice
@@ -200,4 +203,4 @@ rows:
 
 myTable : Result Error Table
 myTable =
-    Yaml.Decode.fromString (map finalize decoder) yamlTable
+    Yaml.Decode.fromString (map finalize (decoder "/myTable")) yamlTable
