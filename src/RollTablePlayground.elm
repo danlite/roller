@@ -7,7 +7,7 @@ import Dice exposing (Expr(..), FormulaTerm(..), RolledExpr(..), RolledFormulaTe
 import Html exposing (Html, button, div, input, text)
 import Html.Attributes exposing (placeholder)
 import Html.Events exposing (onClick, onInput)
-import List exposing (filterMap, length, map)
+import List exposing (length, map)
 import Loader exposing (getDirectory, loadTable)
 import Msg exposing (Msg(..))
 import Parse

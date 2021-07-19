@@ -1,6 +1,6 @@
 module Decode exposing (..)
 
-import Dice exposing (Die, Expr(..), FormulaTerm(..), Row, Table, TableRef, Variable(..), makeSingleRange)
+import Dice exposing (Expr(..), FormulaTerm(..), Row, Table, TableRef, Variable(..), makeSingleRange)
 import Parse exposing (ParsedRow(..), expression, formulaTerm, row)
 import Parser
 import Yaml.Decode exposing (Decoder, Error, andMap, andThen, bool, fail, field, list, map, map3, maybe, oneOf, string, succeed)
@@ -112,7 +112,7 @@ updateLastItem update aList =
             []
 
         last :: remainder ->
-            List.reverse ([ update last ] ++ remainder)
+            List.reverse (update last :: remainder)
 
 
 addTableRefToRow : TableRef -> Row -> Row
@@ -176,6 +176,7 @@ parsedRowDecoder parseResult =
             succeed r
 
 
+yamlTable : String
 yamlTable =
     """
 title: Potion Miscibility

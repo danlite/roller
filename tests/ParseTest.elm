@@ -2,10 +2,10 @@ module ParseTest exposing (..)
 
 import Dice exposing (Expr(..), FormulaTerm(..))
 import Expect exposing (Expectation)
-import Fuzz exposing (Fuzzer, int, intRange, list, string, tuple)
+import Fuzz exposing (Fuzzer, intRange, tuple)
 import Parse exposing (expression)
-import Parser exposing (Parser)
-import Random exposing (constant, maxInt)
+import Parser
+import Random exposing (maxInt)
 import String exposing (fromInt)
 import Test exposing (..)
 

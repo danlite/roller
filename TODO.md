@@ -1,6 +1,7 @@
 - TESTS
 - table search UI
 - roll table refs
+- parse table inputs (e.g. name generators)
 - evaluate row text
   - placeholders
   - variables

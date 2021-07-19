@@ -1,8 +1,7 @@
 module Parse exposing (..)
 
 import Char exposing (isDigit)
-import Dice exposing (Expr(..), FormulaTerm(..), Range, Row, makeRange, makeSingleRange)
-import List.Extra exposing (find)
+import Dice exposing (Expr(..), FormulaTerm(..), Range, makeRange, makeSingleRange)
 import Parser exposing ((|.), (|=), Parser, andThen, getChompedString, int, lazy, map, oneOf, spaces, succeed, symbol)
 import String exposing (toInt)
 
