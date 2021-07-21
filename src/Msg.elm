@@ -1,7 +1,7 @@
-module Msg exposing (InputField(..), Msg(..), TableLoadResult)
+module Msg exposing (InputField(..), Msg(..), RollableLoadResult)
 
 import Debounce
-import Dice exposing (RolledFormulaTerm, RolledTable, Table)
+import Dice exposing (RegisteredRollable, RolledFormulaTerm, RolledTable)
 import Http
 import KeyPress exposing (KeyValue)
 import Yaml.Decode
@@ -13,8 +13,8 @@ type InputField
     | Dice
 
 
-type alias TableLoadResult =
-    Result Http.Error (Result Yaml.Decode.Error Table)
+type alias RollableLoadResult =
+    Result Http.Error (Result Yaml.Decode.Error RegisteredRollable)
 
 
 type Msg
@@ -24,7 +24,7 @@ type Msg
     | Change InputField String
     | GotDirectory (Result Http.Error (List String))
     | LoadTable String
-    | LoadedTable String TableLoadResult
+    | LoadedTable String RollableLoadResult
     | InputTableSearch String
     | StartTableSearch String
     | DebounceMsg Debounce.Msg

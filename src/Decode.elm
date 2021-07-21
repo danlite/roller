@@ -1,9 +1,9 @@
 module Decode exposing (..)
 
-import Dice exposing (Expr(..), FormulaTerm(..), Row, Table, TableRef, Variable(..), makeSingleRange)
+import Dice exposing (Expr(..), FormulaTerm(..), RegisteredRollable, Rollable(..), Row, Table, TableRef, Variable(..), makeSingleRange)
 import Parse exposing (ParsedRow(..), expression, formulaTerm, row)
 import Parser
-import Yaml.Decode exposing (Decoder, Error, andMap, andThen, bool, fail, field, list, map, map4, maybe, oneOf, string, succeed)
+import Yaml.Decode exposing (Decoder, andMap, andThen, bool, fail, field, list, map, map2, map3, maybe, oneOf, string, succeed)
 
 
 listWrapDecoder : Decoder v -> Decoder (List v)
@@ -54,12 +54,22 @@ type YamlRow
     | MetaRow TableRef
 
 
-type alias YamlTable =
-    { path : String
-    , title : String
+type alias YamlTableFields =
+    { title : String
     , dice : Expr
     , rows : List YamlRow
     }
+
+
+type alias YamlBundleFields =
+    { title : String
+    , tables : List TableRef
+    }
+
+
+type YamlFile
+    = YamlTable YamlTableFields
+    | YamlBundle YamlBundleFields
 
 
 rowDecoder : Yaml.Decode.Decoder YamlRow
@@ -80,11 +90,10 @@ diceFromRowList rows =
     Term (MultiDie { count = 1, sides = List.length rows })
 
 
-decoder : String -> Yaml.Decode.Decoder YamlTable
-decoder path =
-    map4
-        YamlTable
-        (succeed path)
+tableDecoder : Decoder YamlFile
+tableDecoder =
+    map3
+        YamlTableFields
         (field "title" string)
         (maybe (field "dice" string)
             |> andThen
@@ -105,6 +114,21 @@ decoder path =
         (field "rows"
             (list rowDecoder)
         )
+        |> map YamlTable
+
+
+bundleDecoder : Decoder YamlFile
+bundleDecoder =
+    map2
+        YamlBundleFields
+        (field "title" string)
+        (field "tables" (list tableRefDecoder))
+        |> map YamlBundle
+
+
+decoder : Decoder YamlFile
+decoder =
+    oneOf [ tableDecoder, bundleDecoder ]
 
 
 updateLastItem : (a -> a) -> List a -> List a
@@ -156,13 +180,22 @@ finalizeRows rows =
     Tuple.second (List.foldl gatherRows ( 0, [] ) rows)
 
 
-finalize : YamlTable -> Table
-finalize table =
-    Table
-        table.path
-        (finalizeRows table.rows)
-        table.title
-        table.dice
+finalize : String -> YamlFile -> RegisteredRollable
+finalize path yamlFile =
+    case yamlFile of
+        YamlTable table ->
+            RegisteredRollable
+                path
+                (RollableTable
+                    (Table
+                        (finalizeRows table.rows)
+                        table.title
+                        table.dice
+                    )
+                )
+
+        YamlBundle bundle ->
+            RegisteredRollable path (RollableBundle bundle)
 
 
 type alias RowParseResult =
@@ -177,30 +210,3 @@ parsedRowDecoder parseResult =
 
         Ok r ->
             succeed r
-
-
-yamlTable : String
-yamlTable =
-    """
-title: Potion Miscibility
-dice: d100
-rows:
-  - 01|The mixture creates a magical explosion, dealing 6d10 force damage to the mixer and 1d10 force damage to each creature within 5 feet of the mixer.
-  - something: 3
-    path: ./somewhere
-    title: Some cool title
-    count: 2
-
-  - 02–08|The mixture becomes an ingested poison of the DM’s choice.
-  - 09–15|Both potions lose their effects.
-  - 16–25|One potion loses its effect.
-  - 26–35|Both potions work, but with their numerical effects and durations halved. A potion has no effect if it can’t be halved in this way.
-  - 36–90|Both potions work normally.
-  - 91–99|The numerical effects and duration of one potion are doubled. If neither potion has anything to double in this way, they work normally.
-  - 00|Only one potion works, but its effect is permanent. Choose the simplest effect to make permanent, or the one that seems the most fun. For example, a potion of healing might increase the drinker’s hit point maximum by 4, or oil of etherealness might permanently trap the user in the Ethereal Plane. At your discretion, an appropriate spell, such as dispel magic or remove curse, might end this lasting effect.
-"""
-
-
-myTable : Result Error Table
-myTable =
-    Yaml.Decode.fromString (map finalize (decoder "/myTable")) yamlTable

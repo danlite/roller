@@ -146,7 +146,20 @@ type alias Row =
 
 
 type alias Table =
-    { path : String, rows : List Row, title : String, dice : Expr }
+    { rows : List Row, title : String, dice : Expr }
+
+
+type alias Bundle =
+    { tables : List TableRef, title : String }
+
+
+type Rollable
+    = RollableTable Table
+    | RollableBundle Bundle
+
+
+type alias RegisteredRollable =
+    { path : String, rollable : Rollable }
 
 
 type Variable

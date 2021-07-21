@@ -5,7 +5,7 @@ import Browser.Events exposing (onKeyDown)
 import Debounce exposing (Debounce)
 import Debug exposing (toString)
 import Decode exposing (YamlRow(..))
-import Dice exposing (Expr(..), FormulaTerm(..), RolledExpr(..), RolledFormulaTerm(..), RolledTable, Table, formulaTermString, rangeString, rollTable)
+import Dice exposing (Expr(..), FormulaTerm(..), RegisteredRollable, Rollable(..), RolledExpr(..), RolledFormulaTerm(..), RolledTable, formulaTermString, rangeString, rollTable)
 import Dict exposing (Dict)
 import Html exposing (Html, button, div, input, span, text)
 import Html.Attributes exposing (placeholder, style)
@@ -16,7 +16,7 @@ import List exposing (length, map)
 import List.Extra
 import Loader exposing (getDirectory, loadTable)
 import Maybe exposing (andThen, withDefault)
-import Msg exposing (Msg(..), TableLoadResult)
+import Msg exposing (Msg(..), RollableLoadResult)
 import Parse
 import Parser
 import Random
@@ -46,8 +46,8 @@ maxResults =
 type TableDirectoryState
     = TableDirectoryLoading
     | TableDirectoryFailed String
-    | TableLoadingProgress Int (Dict String Table)
-    | TableDirectory (Dict String Table)
+    | TableLoadingProgress Int (Dict String RegisteredRollable)
+    | TableDirectory (Dict String RegisteredRollable)
 
 
 type alias Model =
@@ -87,15 +87,15 @@ debounceConfig =
 -- UPDATE
 
 
-loadedTable : Model -> TableLoadResult -> Model
+loadedTable : Model -> RollableLoadResult -> Model
 loadedTable model result =
     let
         newDirectoryUpdate =
             case result of
                 Ok decodeResult ->
                     case decodeResult of
-                        Ok table ->
-                            Dict.insert table.path table
+                        Ok rollable ->
+                            Dict.insert rollable.path rollable
 
                         _ ->
                             identity
@@ -116,8 +116,8 @@ loadedTable model result =
             model
 
 
-selectedTable : Model -> Maybe Table
-selectedTable model =
+selectedRollable : Model -> Maybe RegisteredRollable
+selectedRollable model =
     case model.tables of
         TableDirectory dict ->
             List.Extra.getAt model.searchResultOffset model.tableSearchResults
@@ -153,11 +153,16 @@ update msg model =
             --                 , Random.generate NewRolledTable
             --                     (rollTable table formula)
             --                 )
-            case selectedTable model of
-                Just table ->
+            case selectedRollable model of
+                Just rollable ->
                     ( model
-                    , Random.generate NewRolledTable
-                        (rollTable table table.dice)
+                    , case rollable.rollable of
+                        RollableTable table ->
+                            Random.generate NewRolledTable
+                                (rollTable table table.dice)
+
+                        _ ->
+                            Cmd.none
                     )
 
                 _ ->
@@ -412,7 +417,7 @@ tableSearch model =
                             div []
                                 [ span
                                     [ style "visibility"
-                                        (if Just path == Maybe.map .path (selectedTable model) then
+                                        (if Just path == Maybe.map .path (selectedRollable model) then
                                             ""
 
                                          else
@@ -428,14 +433,21 @@ tableSearch model =
                 ]
 
 
+rollButtonTextForRollable : Rollable -> String
+rollButtonTextForRollable rollable =
+    case rollable of
+        RollableTable table ->
+            "Roll " ++ formulaTermString (Ok table.dice)
+
+        RollableBundle _ ->
+            "Roll bundle"
+
+
 rollButtonText : Model -> String
 rollButtonText model =
     withDefault "Select a table first"
-        (selectedTable model
-            |> Maybe.map .dice
-            |> Maybe.map (\expr -> Ok expr)
-            |> Maybe.map formulaTermString
-            |> Maybe.map (\s -> "Roll " ++ s)
+        (selectedRollable model
+            |> Maybe.map (.rollable >> rollButtonTextForRollable)
         )
 
 

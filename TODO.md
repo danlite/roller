@@ -1,6 +1,5 @@
 - TESTS
-- table bundles
-- roll table refs
+- roll table refs & bundles
 - parse table inputs (e.g. name generators)
 - evaluate row text
   - placeholders
