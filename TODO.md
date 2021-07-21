@@ -1,9 +1,11 @@
 - TESTS
+- table bundles
 - roll table refs
 - parse table inputs (e.g. name generators)
 - evaluate row text
   - placeholders
   - variables
+- multi-dimensional tables
 - nested results state
 - nested results UI (i.e. table refs)
 - reroll result (cascading???)
