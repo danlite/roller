@@ -87,11 +87,6 @@ debounceConfig =
 -- UPDATE
 
 
-appendLog : Model -> String -> a -> Model
-appendLog m message obj =
-    { m | logMessage = m.logMessage ++ [ Debug.toString (Debug.log message obj) ] }
-
-
 loadedTable : Model -> TableLoadResult -> Model
 loadedTable model result =
     let
