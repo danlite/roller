@@ -1,7 +1,9 @@
 module Msg exposing (InputField(..), Msg(..), TableLoadResult)
 
+import Debounce
 import Dice exposing (RolledFormulaTerm, RolledTable, Table)
 import Http
+import KeyPress exposing (KeyValue)
 import Yaml.Decode
 
 
@@ -24,3 +26,7 @@ type Msg
     | LoadTable String
     | LoadedTable String TableLoadResult
     | InputTableSearch String
+    | StartTableSearch String
+    | DebounceMsg Debounce.Msg
+    | KeyPressTableSearch KeyValue
+    | TableSearchFocus Bool

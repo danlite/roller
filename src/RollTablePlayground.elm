@@ -1,22 +1,28 @@
 module RollTablePlayground exposing (main)
 
 import Browser
+import Browser.Events exposing (onKeyDown)
+import Debounce exposing (Debounce)
 import Debug exposing (toString)
 import Decode exposing (YamlRow(..))
 import Dice exposing (Expr(..), FormulaTerm(..), RolledExpr(..), RolledFormulaTerm(..), RolledTable, Table, formulaTermString, rangeString, rollTable)
 import Dict exposing (Dict)
-import Html exposing (Html, button, div, input, li, text, ul)
-import Html.Attributes exposing (placeholder)
-import Html.Events exposing (onClick, onInput)
+import Html exposing (Html, button, div, input, span, text)
+import Html.Attributes exposing (placeholder, style)
+import Html.Events exposing (onBlur, onClick, onFocus, onInput)
+import Json.Decode
+import KeyPress exposing (KeyValue, keyDecoder)
 import List exposing (length, map)
+import List.Extra
 import Loader exposing (getDirectory, loadTable)
-import Maybe exposing (andThen)
+import Maybe exposing (andThen, withDefault)
 import Msg exposing (Msg(..), TableLoadResult)
 import Parse
 import Parser
 import Random
 import Search exposing (fuzzySearch)
 import String exposing (fromInt, toInt)
+import Task
 
 
 
@@ -32,6 +38,11 @@ main =
 -- MODEL
 
 
+maxResults : Int
+maxResults =
+    10
+
+
 type TableDirectoryState
     = TableDirectoryLoading
     | TableDirectoryFailed String
@@ -41,6 +52,7 @@ type TableDirectoryState
 
 type alias Model =
     { logMessage : List String
+    , debounce : Debounce String
     , multiDieCount : Int
     , multiDieSides : Int
     , formula : Result (List Parser.DeadEnd) Expr
@@ -48,14 +60,27 @@ type alias Model =
     , tableResults : Maybe RolledTable
     , tables : TableDirectoryState
     , tableSearchInput : String
+    , tableSearchResults : List String
+    , inSearchField : Bool
+    , searchResultOffset : Int
     }
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model [] 3 8 (Result.Err []) Nothing Nothing TableDirectoryLoading ""
+    ( Model [] Debounce.init 3 8 (Result.Err []) Nothing Nothing TableDirectoryLoading "" [] False 0
     , getDirectory
     )
+
+
+{-| This defines how the debouncer should work.
+Choose the strategy for your use case.
+-}
+debounceConfig : Debounce.Config Msg
+debounceConfig =
+    { strategy = Debounce.later 200
+    , transform = DebounceMsg
+    }
 
 
 
@@ -87,7 +112,7 @@ loadedTable model result =
         TableLoadingProgress n dict ->
             case n of
                 1 ->
-                    { model | tables = TableDirectory (newDirectoryUpdate dict) }
+                    { model | tables = TableDirectory (newDirectoryUpdate dict), tableSearchResults = searchTables "" model }
 
                 _ ->
                     { model | tables = TableLoadingProgress (n - 1) (newDirectoryUpdate dict) }
@@ -100,12 +125,21 @@ selectedTable : Model -> Maybe Table
 selectedTable model =
     case model.tables of
         TableDirectory dict ->
-            List.head (fuzzySearch (Dict.keys dict) model.tableSearchInput)
-                |> andThen
-                    (\k -> Dict.get k dict)
+            List.Extra.getAt model.searchResultOffset model.tableSearchResults
+                |> andThen (\k -> Dict.get k dict)
 
         _ ->
             Nothing
+
+
+searchTables : String -> Model -> List String
+searchTables tableSearchInput model =
+    case model.tables of
+        TableDirectory dict ->
+            fuzzySearch (Dict.keys dict) tableSearchInput
+
+        _ ->
+            []
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -167,16 +201,100 @@ update msg model =
                     ( { model | tables = TableDirectoryFailed (Debug.toString e) }, Cmd.none )
 
                 Ok list ->
-                    ( { model | tables = TableLoadingProgress (List.length list) Dict.empty }, Cmd.batch (List.map loadTable list) )
+                    ( { model | tables = TableLoadingProgress (List.length list) Dict.empty }, Cmd.batch (map loadTable list) )
 
         LoadTable path ->
             ( model, loadTable path )
 
-        LoadedTable path result ->
+        LoadedTable _ result ->
             ( loadedTable model result, Cmd.none )
 
         InputTableSearch input ->
-            ( { model | tableSearchInput = input }, Cmd.none )
+            let
+                ( debounce, cmd ) =
+                    Debounce.push debounceConfig input model.debounce
+            in
+            ( { model
+                | debounce = debounce
+              }
+            , cmd
+            )
+
+        DebounceMsg msg_ ->
+            let
+                ( debounce, cmd ) =
+                    Debounce.update
+                        debounceConfig
+                        (Debounce.takeLast startTableSearch)
+                        msg_
+                        model.debounce
+            in
+            ( { model | debounce = debounce }
+            , cmd
+            )
+
+        StartTableSearch s ->
+            ( { model
+                | tableSearchResults = searchTables s model
+                , tableSearchInput = s
+                , searchResultOffset = 0
+              }
+            , Cmd.none
+            )
+
+        KeyPressTableSearch key ->
+            if model.inSearchField then
+                handleSearchFieldKey key model
+
+            else
+                ( model, Cmd.none )
+
+        TableSearchFocus focus ->
+            ( { model | inSearchField = focus }, Cmd.none )
+
+
+startTableSearch : String -> Cmd Msg
+startTableSearch s =
+    Task.perform StartTableSearch (Task.succeed s)
+
+
+offsetForKeyPress : String -> Maybe Int
+offsetForKeyPress keyDesc =
+    case keyDesc of
+        "ArrowDown" ->
+            Just 1
+
+        "ArrowUp" ->
+            Just -1
+
+        _ ->
+            Nothing
+
+
+handleSearchFieldKey : KeyValue -> Model -> ( Model, Cmd Msg )
+handleSearchFieldKey key model =
+    ( case key of
+        KeyPress.Control keyDesc ->
+            withDefault
+                model
+                (offsetForKeyPress keyDesc
+                    |> Maybe.map (\offset -> { model | searchResultOffset = modBy maxResults (model.searchResultOffset + offset) })
+                )
+
+        _ ->
+            model
+    , case key of
+        KeyPress.Control keyDesc ->
+            case keyDesc of
+                "Enter" ->
+                    Task.perform (\_ -> Roll) (Task.succeed Nothing)
+
+                _ ->
+                    Cmd.none
+
+        _ ->
+            Cmd.none
+    )
 
 
 
@@ -185,7 +303,7 @@ update msg model =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Sub.none
+    onKeyDown (Json.Decode.map KeyPressTableSearch keyDecoder)
 
 
 
@@ -281,42 +399,55 @@ tableSearch model =
         TableDirectoryFailed e ->
             text ("Error! " ++ e)
 
-        TableLoadingProgress remaining dict ->
+        TableLoadingProgress _ dict ->
             text ("Loaded " ++ fromInt (Dict.size dict) ++ " tables...")
 
-        TableDirectory dict ->
+        TableDirectory _ ->
             div []
-                [ input [ placeholder "Table search", onInput InputTableSearch ] []
+                [ input
+                    [ placeholder "Table search"
+                    , onInput InputTableSearch
+                    , onFocus (TableSearchFocus True)
+                    , onBlur (TableSearchFocus False)
+                    ]
+                    []
                 , div []
-                    (List.indexedMap
-                        (\i path ->
+                    (List.map
+                        (\path ->
                             div []
-                                [ text
-                                    ((if i == 0 then
-                                        "→ "
+                                [ span
+                                    [ style "visibility"
+                                        (if Just path == Maybe.map .path (selectedTable model) then
+                                            ""
 
-                                      else
-                                        ""
-                                     )
-                                        ++ path
-                                    )
+                                         else
+                                            "hidden"
+                                        )
+                                    ]
+                                    [ text "→ " ]
+                                , text path
                                 ]
                         )
-                        (List.take 5 (fuzzySearch (Dict.keys dict) model.tableSearchInput))
+                        (List.take maxResults model.tableSearchResults)
                     )
                 ]
 
 
-
--- text
---     (String.join "\n" (List.map (\( path, table ) -> path) (Dict.toList dict)))
+rollButtonText : Model -> String
+rollButtonText model =
+    withDefault "Select a table first"
+        (selectedTable model
+            |> Maybe.map .dice
+            |> Maybe.map (\expr -> Ok expr)
+            |> Maybe.map formulaTermString
+            |> Maybe.map (\s -> "Roll " ++ s)
+        )
 
 
 view : Model -> Html Msg
 view model =
     div []
         [ tableSearch model
-        , input [ placeholder "dice", onInput (Change Msg.Dice) ] []
-        , button [ onClick Roll ] [ text ("ROLL " ++ formulaTermString model.formula) ]
+        , button [ onClick Roll ] [ text (rollButtonText model) ]
         , div [] [ text (rolledTableString model.tableResults) ]
         ]
