@@ -5,21 +5,23 @@ import Browser.Events exposing (onKeyDown)
 import Debounce exposing (Debounce)
 import Debug exposing (toString)
 import Decode exposing (YamlRow(..))
-import Dice exposing (Expr(..), FormulaTerm(..), RegisteredRollable, Rollable(..), RolledExpr(..), RolledFormulaTerm(..), RolledTable, formulaTermString, rangeString, rollTable)
-import Dict exposing (Dict)
+import Dice exposing (Bundle, DiceError(..), Expr(..), FormulaTerm(..), RegisteredRollable, ResolvedBundle, ResolvedTableRef, Rollable(..), RollableRoller, RolledExpr(..), RolledFormulaTerm(..), RolledRollable(..), RolledRollableResult, RolledTable, TableRef, formulaTermString, rangeString, rollBundle, rollTable)
+import Dict
 import Html exposing (Html, button, div, input, span, text)
-import Html.Attributes exposing (placeholder, style)
+import Html.Attributes exposing (list, placeholder, style)
 import Html.Events exposing (onBlur, onClick, onFocus, onInput)
 import Json.Decode
 import KeyPress exposing (KeyValue, keyDecoder)
-import List exposing (length, map)
-import List.Extra
+import List exposing (indexedMap, length, map)
+import List.Extra exposing (getAt, setAt)
 import Loader exposing (getDirectory, loadTable)
 import Maybe exposing (andThen, withDefault)
-import Msg exposing (Msg(..), RollableLoadResult)
+import Maybe.Extra
+import Msg exposing (Msg(..), RollResultIndex, RollableLoadResult)
 import Parse
 import Parser
 import Random
+import Registry exposing (Registry)
 import Search exposing (fuzzySearch)
 import String exposing (fromInt, toInt)
 import Task
@@ -46,8 +48,18 @@ maxResults =
 type TableDirectoryState
     = TableDirectoryLoading
     | TableDirectoryFailed String
-    | TableLoadingProgress Int (Dict String RegisteredRollable)
-    | TableDirectory (Dict String RegisteredRollable)
+    | TableLoadingProgress Int Registry
+    | TableDirectory Registry
+
+
+type NestedTableResult
+    = InitialRolledTable RolledRollableResult (List NestedTableResult)
+    | UnrolledRef TableRef
+    | RolledRef TableRef RolledRollableResult (List NestedTableResult)
+
+
+type alias TableResultList =
+    List NestedTableResult
 
 
 type alias Model =
@@ -57,7 +69,7 @@ type alias Model =
     , multiDieSides : Int
     , formula : Result (List Parser.DeadEnd) Expr
     , results : Maybe RolledFormulaTerm
-    , tableResults : Maybe RolledTable
+    , tableResults : TableResultList
     , tables : TableDirectoryState
     , tableSearchInput : String
     , tableSearchResults : List String
@@ -68,7 +80,7 @@ type alias Model =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Model [] Debounce.init 3 8 (Result.Err []) Nothing Nothing TableDirectoryLoading "" [] False 0
+    ( Model [] Debounce.init 3 8 (Result.Err []) Nothing [] TableDirectoryLoading "" [] False 0
     , getDirectory
     )
 
@@ -97,8 +109,8 @@ loadedTable model result =
                         Ok rollable ->
                             Dict.insert rollable.path rollable
 
-                        _ ->
-                            identity
+                        Err e ->
+                            Debug.log ("decodeResult! " ++ Debug.toString e) identity
 
                 _ ->
                     identity
@@ -137,42 +149,228 @@ searchTables tableSearchInput model =
             []
 
 
+resultAtIndex : RollResultIndex -> TableResultList -> Maybe RolledRollableResult
+resultAtIndex index list =
+    case index of
+        [] ->
+            Nothing
+
+        [ i ] ->
+            getAt i list
+                |> andThen
+                    (\node ->
+                        case node of
+                            InitialRolledTable rolledRollable _ ->
+                                Just rolledRollable
+
+                            RolledRef _ rolledRollable _ ->
+                                Just rolledRollable
+
+                            _ ->
+                                Nothing
+                    )
+
+        i :: rest ->
+            getAt i list
+                |> andThen
+                    (\node ->
+                        case node of
+                            InitialRolledTable _ nestedList ->
+                                resultAtIndex rest nestedList
+
+                            RolledRef _ _ nestedList ->
+                                resultAtIndex rest nestedList
+
+                            _ ->
+                                Nothing
+                    )
+
+
+generatorToRerollResult : RolledRollable -> RollableRoller
+generatorToRerollResult toReroll =
+    case toReroll of
+        RolledTable_ tableToReroll ->
+            Random.map Ok
+                (Random.map RolledTable_ (rollTable tableToReroll.table tableToReroll.table.dice))
+
+        RolledBundle_ bundleToReroll ->
+            case rollBundle Dict.empty bundleToReroll.bundle of
+                Ok roller ->
+                    Random.map Ok (Random.map RolledBundle_ roller)
+
+                Err e ->
+                    Random.map Err (Random.constant e)
+
+
+rerollResultIntoIndex : RollResultIndex -> RolledRollableResult -> Cmd Msg
+rerollResultIntoIndex index toReroll =
+    case toReroll of
+        Err e ->
+            Debug.log "cannot reroll invalid result" Cmd.none
+
+        Ok rollable ->
+            Random.generate (RerolledTable index) (generatorToRerollResult rollable)
+
+
+rerollResultAtIndex : RollResultIndex -> Model -> Cmd Msg
+rerollResultAtIndex index model =
+    Maybe.withDefault Cmd.none
+        (resultAtIndex index model.tableResults
+            |> andThen
+                (rerollResultIntoIndex index >> Just)
+        )
+
+
+tableRefsForRolledTable : RolledRollableResult -> List NestedTableResult
+tableRefsForRolledTable result =
+    case result of
+        Err e ->
+            []
+
+        Ok rolledRollable ->
+            case rolledRollable of
+                RolledTable_ rolledTable ->
+                    case rolledTable.row of
+                        Ok row ->
+                            List.map UnrolledRef row.tableRefs
+
+                        _ ->
+                            []
+
+                RolledBundle_ rolledBundle ->
+                    []
+
+
+replaceResult : TableResultList -> RollResultIndex -> RolledRollableResult -> TableResultList
+replaceResult list index rolledRollable =
+    case index of
+        [] ->
+            list
+
+        [ i ] ->
+            case getAt i list of
+                Just (RolledRef ref _ _) ->
+                    setAt i (RolledRef ref rolledRollable (tableRefsForRolledTable rolledRollable)) list
+
+                Just (InitialRolledTable _ _) ->
+                    setAt i (InitialRolledTable rolledRollable (tableRefsForRolledTable rolledRollable)) list
+
+                Just (UnrolledRef ref) ->
+                    setAt i (RolledRef ref rolledRollable (tableRefsForRolledTable rolledRollable)) list
+
+                Nothing ->
+                    list
+
+        i :: rest ->
+            case getAt i list of
+                Just (RolledRef _ _ nested) ->
+                    replaceResult nested rest rolledRollable
+
+                Just (InitialRolledTable _ nested) ->
+                    replaceResult nested rest rolledRollable
+
+                _ ->
+                    list
+
+
+modelRegistry : Model -> Registry
+modelRegistry model =
+    case model.tables of
+        TableLoadingProgress _ reg ->
+            reg
+
+        TableDirectory reg ->
+            reg
+
+        _ ->
+            Dict.empty
+
+
+resolveBundleTableRefs : Model -> RegisteredRollable -> Maybe (List ResolvedTableRef)
+resolveBundleTableRefs model rollable =
+    case rollable.rollable of
+        RollableBundle bundle ->
+            Maybe.Extra.combine
+                (List.map
+                    (\ref ->
+                        Dict.get ref.path (modelRegistry model)
+                            |> Maybe.andThen
+                                (\rr ->
+                                    case rr.rollable of
+                                        RollableTable table ->
+                                            Just (ResolvedTableRef table ref)
+
+                                        _ ->
+                                            Nothing
+                                )
+                    )
+                    bundle.tables
+                )
+
+        _ ->
+            Nothing
+
+
+resolveBundle : Model -> RegisteredRollable -> Maybe ResolvedBundle
+resolveBundle model rollable =
+    case rollable.rollable of
+        RollableBundle bundle ->
+            resolveBundleTableRefs model rollable
+                |> Maybe.andThen (\trs -> Just (ResolvedBundle trs bundle.title))
+
+        _ ->
+            Nothing
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Roll ->
-            -- case model.formula of
-            --     Err _ ->
-            --         ( model, Cmd.none )
-            --     Ok formula ->
-            --         case Decode.myTable of
-            --             Err _ ->
-            --                 ( model, Cmd.none )
-            --             Ok table ->
-            --                 ( model
-            --                 , Random.generate NewRolledTable
-            --                     (rollTable table formula)
-            --                 )
-            case selectedRollable model of
-                Just rollable ->
-                    ( model
-                    , case rollable.rollable of
-                        RollableTable table ->
-                            Random.generate NewRolledTable
-                                (rollTable table table.dice)
+        Roll rollRequest ->
+            case rollRequest of
+                Msg.SelectedTable ->
+                    case selectedRollable model of
+                        Just rollable ->
+                            ( model
+                            , case rollable.rollable of
+                                RollableTable table ->
+                                    Random.generate NewRolledTable
+                                        (Random.map Ok
+                                            (Random.map
+                                                RolledTable_
+                                                (rollTable table table.dice)
+                                            )
+                                        )
+
+                                RollableBundle _ ->
+                                    case resolveBundle model rollable of
+                                        Nothing ->
+                                            Cmd.none
+
+                                        Just bundle ->
+                                            (case rollBundle Dict.empty bundle of
+                                                Ok roller ->
+                                                    Random.map Ok (Random.map RolledBundle_ roller)
+
+                                                Err e ->
+                                                    Random.map Err (Random.constant e)
+                                            )
+                                                |> Random.generate NewRolledTable
+                            )
 
                         _ ->
-                            Cmd.none
-                    )
+                            ( model, Cmd.none )
 
-                _ ->
-                    ( model, Cmd.none )
+                Msg.Reroll index ->
+                    ( model, rerollResultAtIndex index model )
 
         NewResults newResults ->
             ( { model | results = Just newResults }, Cmd.none )
 
+        RerolledTable index rolledTable ->
+            ( { model | tableResults = replaceResult model.tableResults index rolledTable }, Cmd.none )
+
         NewRolledTable newRolledTable ->
-            ( { model | tableResults = Just newRolledTable }, Cmd.none )
+            ( { model | tableResults = model.tableResults ++ [ InitialRolledTable newRolledTable (tableRefsForRolledTable newRolledTable) ] }, Cmd.none )
 
         Change inputField str ->
             case inputField of
@@ -287,7 +485,7 @@ handleSearchFieldKey key model =
         KeyPress.Control keyDesc ->
             case keyDesc of
                 "Enter" ->
-                    Task.perform (\_ -> Roll) (Task.succeed Nothing)
+                    Task.perform (\_ -> Roll Msg.SelectedTable) (Task.succeed Nothing)
 
                 _ ->
                     Cmd.none
@@ -313,25 +511,46 @@ subscriptions _ =
 rowString : Dice.TableRowRollResult -> String
 rowString r =
     case r of
-        Err v ->
-            "[No row for value=" ++ fromInt v ++ "]"
+        Err err ->
+            case err of
+                MissingContextVariable v ->
+                    "[Missing context variable " ++ v ++ "]"
+
+                ValueNotMatchingRow v ->
+                    "[No row for value=" ++ fromInt v ++ "]"
 
         Ok row ->
             rangeString row.range ++ ": " ++ row.content
 
 
-rolledTableString : Maybe RolledTable -> String
-rolledTableString table =
-    case table of
-        Nothing ->
-            "[T?]"
+rolledRollableString : RolledRollableResult -> String
+rolledRollableString result =
+    case result of
+        Err e ->
+            Debug.toString e
 
-        Just table2 ->
-            rolledExprString table2.roll
-                ++ " = "
-                ++ fromInt (Dice.evaluateExpr table2.roll)
-                ++ " → "
-                ++ rowString table2.row
+        Ok rollable ->
+            case rollable of
+                RolledTable_ table ->
+                    rolledTableString table
+
+                RolledBundle_ bundle ->
+                    String.join " ; "
+                        (List.map
+                            rolledTableString
+                            (List.map .rolled bundle.tables
+                                |> List.foldr (++) []
+                            )
+                        )
+
+
+rolledTableString : RolledTable -> String
+rolledTableString table =
+    rolledExprString table.roll
+        ++ " = "
+        ++ fromInt (Dice.evaluateExpr table.roll)
+        ++ " → "
+        ++ rowString table.row
 
 
 rolledExprString : RolledExpr -> String
@@ -451,10 +670,71 @@ rollButtonText model =
         )
 
 
+appendIndex : RollResultIndex -> Int -> RollResultIndex
+appendIndex indexPath newIndex =
+    indexPath ++ [ newIndex ]
+
+
+indexPathString : RollResultIndex -> String
+indexPathString indexPath =
+    "[" ++ String.join "." (List.map fromInt indexPath) ++ "]"
+
+
+tableRefDisplay : TableRef -> Html Msg
+tableRefDisplay tableRef =
+    div [] [ text (Debug.toString tableRef) ]
+
+
+rowTableRefsDisplay : RolledTable -> Html Msg
+rowTableRefsDisplay rolledTable =
+    case rolledTable.row of
+        Ok row ->
+            div [] (List.map tableRefDisplay row.tableRefs)
+
+        _ ->
+            text ""
+
+
+tableResultNode : RollResultIndex -> NestedTableResult -> Html Msg
+tableResultNode indexPath node =
+    div [ style "margin-left" (fromInt (5 * List.length indexPath) ++ "px") ]
+        (case node of
+            InitialRolledTable rolledRollableResult nested ->
+                [ button [ onClick (Roll (Msg.Reroll indexPath)) ] [ text ("↺ " ++ indexPathString indexPath) ]
+                , text (rolledRollableString rolledRollableResult)
+                , tableResultList indexPath nested
+                ]
+
+            RolledRef ref rolledRollableResult nested ->
+                [ button [ onClick (Roll (Msg.Reroll indexPath)) ] [ text ("↺ " ++ indexPathString indexPath) ]
+                , text (rolledRollableString rolledRollableResult)
+                , tableResultList indexPath nested
+                ]
+
+            UnrolledRef ref ->
+                [ tableRefDisplay ref ]
+        )
+
+
+tableResultList : RollResultIndex -> TableResultList -> Html Msg
+tableResultList indexPath list =
+    div []
+        (indexedMap
+            (\i r ->
+                let
+                    newIndex =
+                        appendIndex indexPath i
+                in
+                tableResultNode newIndex r
+            )
+            list
+        )
+
+
 view : Model -> Html Msg
 view model =
     div []
         [ tableSearch model
-        , button [ onClick Roll ] [ text (rollButtonText model) ]
-        , div [] [ text (rolledTableString model.tableResults) ]
+        , button [ onClick (Roll Msg.SelectedTable) ] [ text (rollButtonText model) ]
+        , tableResultList [] model.tableResults
         ]

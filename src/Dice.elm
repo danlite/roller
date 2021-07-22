@@ -1,9 +1,19 @@
 module Dice exposing (..)
 
+import Dict exposing (Dict)
 import List exposing (map, sum)
 import List.Extra
+import Maybe exposing (withDefault)
 import Random
+import Random.Extra
+import Result exposing (fromMaybe)
+import Result.Extra
 import String exposing (fromInt)
+
+
+type DiceError
+    = MissingContextVariable String
+    | ValueNotMatchingRow Int
 
 
 type alias Die =
@@ -153,6 +163,10 @@ type alias Bundle =
     { tables : List TableRef, title : String }
 
 
+type alias ResolvedBundle =
+    { tables : List ResolvedTableRef, title : String }
+
+
 type Rollable
     = RollableTable Table
     | RollableBundle Bundle
@@ -181,6 +195,10 @@ type alias TableRef =
     --     [key: string]: '$roll'
     --   }
     }
+
+
+type alias ResolvedTableRef =
+    { table : Table, ref : TableRef }
 
 
 tableMin : Table -> Maybe Int
@@ -214,19 +232,44 @@ dieForTable table =
 
 
 type alias RolledTable =
-    { roll : RolledExpr, row : TableRowRollResult }
+    { roll : RolledExpr, row : TableRowRollResult, table : Table }
+
+
+type alias RolledBundle =
+    { tables : List RolledTableRef, bundle : ResolvedBundle }
+
+
+type RolledRollable
+    = RolledBundle_ RolledBundle
+    | RolledTable_ RolledTable
+
+
+type alias RolledTableRef =
+    { ref : ResolvedTableRef, rolled : List RolledTable }
+
+
+type alias RolledRollableResult =
+    Result DiceError RolledRollable
+
+
+type alias RollableRoller =
+    Random.Generator RolledRollableResult
+
+
+type alias BundleRoller =
+    Random.Generator RolledBundle
 
 
 type alias TableRoller =
     Random.Generator RolledTable
 
 
-type alias ValueNotMatchingRow =
-    Int
+type alias TableRefRoller =
+    Random.Generator RolledTableRef
 
 
 type alias TableRowRollResult =
-    Result ValueNotMatchingRow Row
+    Result DiceError Row
 
 
 tableRowForRoll : RolledExpr -> Table -> TableRowRollResult
@@ -237,7 +280,7 @@ tableRowForRoll roll table =
     in
     case List.Extra.find (\r -> rangeIncludes rollValue r.range) table.rows of
         Nothing ->
-            Err rollValue
+            Err (ValueNotMatchingRow rollValue)
 
         Just row ->
             Ok row
@@ -245,7 +288,78 @@ tableRowForRoll roll table =
 
 rollTable : Table -> Expr -> TableRoller
 rollTable table expr =
-    Random.map (\r -> { roll = r, row = tableRowForRoll r table }) (rollExpr expr)
+    Random.map (\r -> { roll = r, row = tableRowForRoll r table, table = table }) (rollExpr expr)
+
+
+rollBundle : RollContext -> ResolvedBundle -> Result DiceError BundleRoller
+rollBundle context bundle =
+    rollBundleTables context bundle
+        |> Result.andThen
+            (Random.map
+                (\tableRolls -> { tables = tableRolls, bundle = bundle })
+                >> Ok
+            )
+
+
+type alias RollContext =
+    Dict String Int
+
+
+type alias ContextVariableResult =
+    Result DiceError Int
+
+
+valueInContext : Variable -> RollContext -> ContextVariableResult
+valueInContext var context =
+    case var of
+        ConstValue n ->
+            Ok n
+
+        ContextKey k ->
+            fromMaybe (MissingContextVariable k) (Dict.get k context)
+
+
+rollCount : Maybe Variable -> RollContext -> ContextVariableResult
+rollCount var context =
+    withDefault
+        (Ok 1)
+        (Maybe.map (\v -> valueInContext v context) var)
+
+
+rollTableRef : RollContext -> ResolvedTableRef -> Result DiceError TableRefRoller
+rollTableRef context tableRef =
+    rollTableRefTables
+        context
+        tableRef
+        |> Result.andThen
+            (Random.map
+                (\rolledTables -> RolledTableRef tableRef rolledTables)
+                >> Ok
+            )
+
+
+rollTableRefTables : RollContext -> ResolvedTableRef -> Result DiceError (Random.Generator (List RolledTable))
+rollTableRefTables context tableRef =
+    rollCount tableRef.ref.rollCount context
+        |> Result.andThen
+            (\count ->
+                Ok
+                    (Random.list
+                        count
+                        (rollTable tableRef.table tableRef.table.dice)
+                    )
+            )
+
+
+rollBundleTables : RollContext -> ResolvedBundle -> Result DiceError (Random.Generator (List RolledTableRef))
+rollBundleTables context bundle =
+    Result.Extra.combine
+        (List.map
+            (rollTableRef context)
+            bundle.tables
+        )
+        |> Result.andThen
+            (Random.Extra.combine >> Ok)
 
 
 type Expr
