@@ -34,7 +34,7 @@ type Row
     | EvaluatedRow { text : List RollableText, refs : List RollableRef }
 
 
-type alias RollInstructions = 
+type alias RollInstructions =
     {}
 
 
@@ -42,18 +42,18 @@ type alias RollableRefData =
     { path : String, instructions : RollInstructions }
 
 
-type alias WithRollableSource a =
-    { a | rollable : RollableSource }
+type alias WithBundle a =
+    { a | bundle : Bundle }
 
 
-type alias WithResult a =
-    { a | result : List Rollable }
+type alias WithTableResult a =
+    { a | result : List TableRollResult, title : String }
 
 
 type RollableRef
     = Ref RollableRefData
-    | Resolved (WithRollableSource RollableRefData)
-    | Rolled (WithResult (WithRollableSource RollableRefData))
+    | BundleRef (WithBundle RollableRefData)
+    | RolledTable (WithTableResult RollableRefData)
 
 
 type TableRollResult
@@ -61,27 +61,20 @@ type TableRollResult
     | MissingRowError { rollTotal : Int }
 
 
-type alias TableSourceData =
-    { path : String, title : String, rows : List Row, inputs : List RollableRef }
+type alias TableSource =
+    { rows : List Row
+    , inputs : List RollableRef
+    , path : String
+    , title : String
+    }
 
 
-type RollableSource
-    = TableSource TableSourceData
-    | BundleSource Bundle
-    | MissingSourceError { path : String }
-
-
-type Table
-    = RegisteredTable TableSourceData
-    | RolledTable { path : String, title : String, result : TableRollResult }
-
-
-type Bundle
-    = Bundle { path : String, title : String, tables : List RollableRef }
+type alias Bundle =
+    { path : String, title : String, tables : List RollableRef }
 
 
 type Rollable
-    = RollableTable Table
+    = RollableTable TableSource
     | RollableBundle Bundle
     | MissingRollableError { path : String }
 
@@ -90,35 +83,29 @@ type alias Model =
     List RollableRef
 
 
-
-{-
-   [0] RollableRef.Rolled
-       [^] Table.RolledTable
-           - Row
-   [1] RollableRef.Rolled
-       [^] Table.RolledTable
-           - Row
-           [1.0] RollableRef.Resolved
-               - Table + RollInstructions
-           [1.1] RollableRef.Rolled
-               [1.1.0] Table.RolledTable
-                       - Row
-               [1.1.1] Table.RegisteredTable
-   [2] RollableRef.Rolled
-       [^] Bundle
-           [2.0] RollableRef
-           [2.1] RollableRef
--}
+type alias Registry =
+    Dict String Rollable
 
 
+aRegistry : Registry
 aRegistry =
     Dict.empty
 
 
-findTableSource : Dict String RollableSource -> String -> Maybe TableSourceData
+findTableSource : Registry -> String -> Maybe TableSource
 findTableSource registry path =
     case Dict.get path registry of
-        Just (TableSource data) ->
+        Just (RollableTable data) ->
+            Just data
+
+        _ ->
+            Nothing
+
+
+findBundleSource : Registry -> String -> Maybe Bundle
+findBundleSource registry path =
+    case Dict.get path registry of
+        Just (RollableBundle data) ->
             Just data
 
         _ ->
@@ -135,78 +122,81 @@ mockRolledRow refs =
     RolledRow { result = Row { range = 3, refs = refs, text = "RolledRow" }, rollTotal = 3 }
 
 
-mockRolledTable : String -> TableRollResult -> Rollable
-mockRolledTable path result =
-    RollableTable (RolledTable { path = path, title = "RolledTable", result = result })
+mockRolledTable : String -> String -> List TableRollResult -> RollableRef
+mockRolledTable path title result =
+    RolledTable { path = path, instructions = {}, result = result, title = title }
 
 
-mockTableSource : String -> RollableSource
-mockTableSource path =
-    TableSource { path = path, title = "TableSource", rows = [ mockRow, mockRow ], inputs = [] }
-
-
-mockRegisteredTable : String -> Rollable
-mockRegisteredTable path =
-    RollableTable (RegisteredTable { path = path, title = "RegisteredTable", rows = [], inputs = [] })
-
-
-mockRolledRef : String -> List Rollable -> RollableRef
-mockRolledRef path rollables =
-    Rolled { path = path, instructions = {}, result = rollables, rollable = mockTableSource path }
-
-
-mockResolvedRef : String -> RollableSource -> RollableRef
-mockResolvedRef path rollable =
-    Resolved
+mockTableRef : String -> RollableRef
+mockTableRef path =
+    Ref
         { path = path
         , instructions = {}
-        , rollable = rollable
         }
 
 
-mockBundle : String -> List RollableRef -> Rollable
+mockBundleRef : String -> List RollableRef -> RollableRef
+mockBundleRef path tables =
+    BundleRef { bundle = mockBundle path tables, path = path, instructions = {} }
+
+
+mockBundle : String -> List RollableRef -> Bundle
 mockBundle path tables =
-    RollableBundle
-        (Bundle { path = path, title = "MockBundle", tables = tables })
+    { path = path, title = "MockBundle", tables = tables }
+
+
+
+{-
+   [0] RollableRef.RolledTable
+        - Row
+   [1] RollableRef.RolledTable
+        - Row
+        [1.0] RollableRef.TableRef
+        [1.1] RollableRef.Bundle
+            [^] Bundle
+                [1.1.0] RollableRef.RolledTable
+                    - Row
+                    - Row
+                [1.1.1] RollableRef.RolledTable
+                    - Row
+                        [1.1.1.0] RollableRef.TableRef
+   [2] RollableRef.Bundle
+       [^] Bundle
+           [2.0] RollableRef.TableRef
+           [2.1] RollableRef.RolledTable
+-}
 
 
 initialModel : Model
 initialModel =
-    [ mockRolledRef "/a/b/c"
-        [ mockRolledTable "/a/b/c"
-            (mockRolledRow [])
-        ]
-    , mockRolledRef "/d/e/f"
-        [ mockRolledTable "/d/e/f"
-            (mockRolledRow
-                [ mockResolvedRef "/g/h/i"
-                    (mockTableSource "/g/h/i")
-                , mockRolledRef "/j/k/l"
-                    [ mockRolledTable "/j/k/l"
-                        (mockRolledRow [])
-                    , mockRolledTable "/j/k/l"
-                        (mockRolledRow [])
+    [ mockRolledTable "/a/b/c"
+        "ABC"
+        [ mockRolledRow [] ]
+    , mockRolledTable "/d/e/f"
+        "DEF"
+        [ mockRolledRow
+            [ mockTableRef "/g/h/i"
+            , mockBundleRef "/j/k/l"
+                [ mockRolledTable "/m/n/o"
+                    "MNO"
+                    [ mockRolledRow []
+                    , mockRolledRow []
                     ]
-                , mockRolledRef "/x/y/z"
-                    [ mockRolledTable "/x/y/z"
-                        (mockRolledRow
-                            [ mockResolvedRef "/u/v/w" (mockTableSource "/u/v/w")
-                            ]
-                        )
+                , mockRolledTable "/p/q/r"
+                    "PQR"
+                    [ mockRolledRow
+                        [ mockTableRef "/s/t/u"
+                        ]
                     ]
-                ]
-            )
-        ]
-    , mockRolledRef "/m/n/o"
-        [ mockBundle "/m/n/o"
-            [ Ref { path = "/a/b/c", instructions = {} }
-            , mockRolledRef
-                "/d/e/f"
-                [ mockRolledTable
-                    "/d/e/f"
-                    (mockRolledRow [])
                 ]
             ]
+        ]
+    , mockBundleRef "/v/w/x"
+        [ mockTableRef "/1/2/3"
+        , mockRolledTable
+            "/4/5/6"
+            "456"
+            [ mockRolledRow [] ]
         ]
     ]
 
@@ -226,17 +216,14 @@ tableRollResultRefs result =
             []
 
 
-rollableRefs : Rollable -> List RollableRef
-rollableRefs rollable =
-    case rollable of
-        RollableBundle (Bundle bundle) ->
-            bundle.tables
+refsForRow : Row -> List RollableRef
+refsForRow row =
+    case row of
+        Row r ->
+            r.refs
 
-        RollableTable (RolledTable table) ->
-            tableRollResultRefs table.result
-
-        _ ->
-            []
+        EvaluatedRow r ->
+            r.refs
 
 
 refAtIndex : IndexPath -> List RollableRef -> Maybe RollableRef
@@ -250,18 +237,18 @@ refAtIndex index model =
 
         i :: rest ->
             case List.Extra.getAt i model of
-                Just (Resolved info) ->
-                    case info.rollable of
-                        BundleSource (Bundle bundle) ->
-                            refAtIndex rest bundle.tables
+                Just (BundleRef bundleRef) ->
+                    refAtIndex rest bundleRef.bundle.tables
 
-                        _ ->
-                            Nothing
-
-                Just (Rolled info) ->
+                Just (RolledTable info) ->
                     case info.result of
-                        [ rollable ] ->
-                            refAtIndex rest (rollableRefs rollable)
+                        [ rollResult ] ->
+                            case rollResult of
+                                RolledRow rolledRow ->
+                                    refAtIndex rest (refsForRow rolledRow.result)
+
+                                _ ->
+                                    Nothing
 
                         _ ->
                             Nothing
@@ -299,62 +286,24 @@ refRollableTitle ref =
         Ref r ->
             r.path
 
-        Resolved r ->
-            rollableSourceTitle r.rollable
+        RolledTable r ->
+            r.title
 
-        Rolled r ->
-            List.head r.result
-                |> Maybe.map rollableTitle
-                |> Maybe.withDefault r.path
+        BundleRef r ->
+            r.bundle.title
 
 
-rollableSourceTitle : RollableSource -> String
-rollableSourceTitle rollable =
-    case rollable of
-        TableSource table ->
-            table.title
+rollableRefPath : RollableRef -> String
+rollableRefPath r =
+    case r of
+        Ref ref ->
+            ref.path
 
-        BundleSource (Bundle bundle) ->
-            bundle.title
+        RolledTable ref ->
+            ref.path
 
-        MissingSourceError err ->
-            "Could not find " ++ err.path
-
-
-rollableTitle : Rollable -> String
-rollableTitle rollable =
-    case rollable of
-        RollableTable table ->
-            case table of
-                RegisteredTable t ->
-                    t.title
-
-                RolledTable t ->
-                    t.title
-
-        RollableBundle (Bundle bundle) ->
-            bundle.title
-
-        MissingRollableError err ->
-            "Could not find " ++ err.path
-
-
-rollablePath : Rollable -> String
-rollablePath rollable =
-    case rollable of
-        RollableTable table ->
-            case table of
-                RegisteredTable t ->
-                    t.path
-
-                RolledTable t ->
-                    t.path
-
-        RollableBundle (Bundle bundle) ->
-            bundle.path
-
-        MissingRollableError err ->
-            err.path
+        BundleRef ref ->
+            ref.path
 
 
 rollButton : IndexPath -> String -> Html Msg
@@ -366,20 +315,23 @@ rollableRefView : IndexPath -> RollableRef -> Html Msg
 rollableRefView index ref =
     case ref of
         Ref info ->
-            div ([ class "ref" ] ++ indexClass index) [ text info.path ]
+            div
+                (class "ref" :: indexClass index)
+                [ text info.path, rollButton index ("Roll " ++ info.path) ]
 
-        Resolved info ->
-            div ([ class "ref-resolved" ] ++ indexClass index)
-                [ rollableSourceTitle info.rollable |> text
-                , rollButton index ("Roll " ++ info.path)
-                ]
+        RolledTable info ->
+            div
+                (class "rolled-table" :: indexClass index)
+                ([ text info.path, rollButton index ("Reroll " ++ info.title) ]
+                    ++ List.map (tableRollResultView index) info.result
+                )
 
-        Rolled info ->
-            div ([ class "ref-rolled" ] ++ indexClass index)
-                ([ refRollableTitle ref |> text
-                 , rollButton index ("Reroll " ++ info.path)
+        BundleRef info ->
+            div (class "bundle-ref" :: indexClass index)
+                ([ info.bundle.title |> text
+                 , rollButton index ("Roll " ++ info.bundle.title)
                  ]
-                    ++ refResultsView index info.result
+                    ++ bundleTablesView index info.bundle.tables
                 )
 
 
@@ -402,75 +354,41 @@ indented =
     style "margin-left" "1em"
 
 
-refResultsView : IndexPath -> List Rollable -> List (Html Msg)
-refResultsView index results =
-    case results of
+bundleTablesView : IndexPath -> List RollableRef -> List (Html Msg)
+bundleTablesView index tables =
+    case tables of
         [] ->
             [ text "" ]
 
-        [ rollable ] ->
-            [ refResultsSingleView index rollable ]
+        [ ref ] ->
+            [ refResultsSingleView index ref ]
 
-        rollables ->
-            List.Extra.groupWhile rollablesShouldBeGrouped rollables
-                |> List.map (refResultsGroupView index)
+        rollRefs ->
+            List.Extra.groupWhile rollablesShouldBeGrouped rollRefs
+                |> mapChildIndexes index refResultsGroupView
 
 
-rollablesShouldBeGrouped : Rollable -> Rollable -> Bool
+rollablesShouldBeGrouped : RollableRef -> RollableRef -> Bool
 rollablesShouldBeGrouped r1 r2 =
-    rollablePath r1 == rollablePath r2
+    rollableRefPath r1 == rollableRefPath r2
 
 
-refResultsSingleView : IndexPath -> Rollable -> Html Msg
-refResultsSingleView index rollable =
+refResultsSingleView : IndexPath -> RollableRef -> Html Msg
+refResultsSingleView index ref =
     div [ class "ref-result-single" ]
-        [ rollableView index rollable ]
+        [ rollableRefView index ref ]
 
 
-refResultsGroupView : IndexPath -> ( Rollable, List Rollable ) -> Html Msg
-refResultsGroupView index ( firstRollable, rollables ) =
-    case rollables of
+refResultsGroupView : IndexPath -> ( RollableRef, List RollableRef ) -> Html Msg
+refResultsGroupView index ( firstRef, refs ) =
+    case refs of
         [] ->
-            refResultsSingleView index firstRollable
+            refResultsSingleView index firstRef
 
         _ ->
             div
                 [ class "ref-result-multiple" ]
-                (mapChildIndexes index rollableView (firstRollable :: rollables))
-
-
-rollableView : IndexPath -> Rollable -> Html Msg
-rollableView index rollable =
-    case rollable of
-        RollableTable t ->
-            tableView index t
-
-        RollableBundle b ->
-            case b of
-                Bundle bundle ->
-                    div [ class "bundle" ]
-                        (mapChildIndexes
-                            index
-                            rollableRefView
-                            bundle.tables
-                        )
-
-        _ ->
-            rollableTitle rollable |> text
-
-
-tableView : IndexPath -> Table -> Html Msg
-tableView index t =
-    case t of
-        RegisteredTable table ->
-            div
-                [ class "table-registered" ]
-                [ text table.title ]
-
-        RolledTable table ->
-            div
-                [ class "table-rolled" ]
-                [ tableRollResultView index table.result ]
+                (mapChildIndexes index rollableRefView (firstRef :: refs))
 
 
 tableRollResultView : IndexPath -> TableRollResult -> Html Msg
@@ -542,11 +460,11 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        DidRoll index ref ->
+        DidRoll _ _ ->
             -- TODO: replace at index
             ( model, Cmd.none )
 
-        RollNew ref ->
+        RollNew _ ->
             ( model, Cmd.none )
 
 
@@ -569,61 +487,50 @@ pickRowFromTable rows =
     Random.map (rollResultForRollOnTable rows) (Random.int 1 (List.length rows))
 
 
-rollOnTable : RollInstructions -> TableSourceData -> Generator Table
-rollOnTable instructions source =
+rollOnTable : RollInstructions -> TableSource -> Generator TableRollResult
+rollOnTable _ source =
     -- TODO: obey instructions for rollCount > 1 (TBD: row ranges, reroll, unique)
     pickRowFromTable source.rows
-        |> Random.map (\r -> RolledTable { path = source.path, title = source.title, result = r })
 
 
 rollOnBundle : Bundle -> Generator Bundle
-rollOnBundle b =
-    case b of
-        Bundle bundle ->
-            List.map rollOnRef bundle.tables
-                |> Random.Extra.sequence
-                |> Random.map (\refs -> Bundle { bundle | tables = refs })
-
-
-rollOnRollable : RollInstructions -> RollableSource -> Generator (List Rollable)
-rollOnRollable instructions rollable =
-    case rollable of
-        TableSource tableSource ->
-            rollOnTable instructions tableSource
-                |> Random.map RollableTable
-                |> Random.map List.singleton
-
-        BundleSource bundle ->
-            rollOnBundle bundle
-                |> Random.map RollableBundle
-                |> Random.map List.singleton
-
-        _ ->
-            Random.constant []
+rollOnBundle bundle =
+    List.map rollOnRef bundle.tables
+        |> Random.Extra.sequence
+        |> Random.map (\refs -> { bundle | tables = refs })
 
 
 rollOnRef : RollableRef -> Generator RollableRef
 rollOnRef r =
     case r of
-        Resolved ref ->
-            rollOnRefHelp ref
+        Ref ref ->
+            case findTableSource aRegistry ref.path of
+                Just table ->
+                    -- TODO: multiple rolls on table
+                    rollOnTable ref.instructions table
+                        |> Random.map List.singleton
+                        |> Random.map
+                            (\res ->
+                                RolledTable
+                                    { path = ref.path
+                                    , instructions = ref.instructions
+                                    , result = res
+                                    , title = table.title
+                                    }
+                            )
 
-        Rolled ref ->
-            rollOnRefHelp ref
+                _ ->
+                    Random.constant r
+
+        BundleRef ref ->
+            rollOnBundle ref.bundle
+                |> Random.map
+                    (\res ->
+                        BundleRef
+                            { ref
+                                | bundle = res
+                            }
+                    )
 
         _ ->
             Random.constant r
-
-
-rollOnRefHelp : { a | path : String, instructions : RollInstructions, rollable : RollableSource } -> Generator RollableRef
-rollOnRefHelp ref =
-    rollOnRollable ref.instructions ref.rollable
-        |> Random.map
-            (\result ->
-                Rolled
-                    { path = ref.path
-                    , instructions = ref.instructions
-                    , result = result
-                    , rollable = ref.rollable
-                    }
-            )
