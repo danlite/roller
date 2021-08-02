@@ -10,7 +10,7 @@ import Maybe exposing (withDefault)
 import Parser
 import String exposing (fromInt)
 import V2.Model exposing (Model, Msg(..), Roll(..), TableDirectoryState(..), maxResults, rollablePath, selectedRollable)
-import V2.Rollable exposing (EvaluatedRow, IndexPath, Rollable(..), RollableRef(..), Row, TableRollResult(..))
+import V2.Rollable exposing (EvaluatedRow, IndexPath, Rollable(..), RollableRef(..), TableRollResult(..))
 
 
 refRollableTitle : RollableRef -> String

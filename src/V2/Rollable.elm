@@ -49,6 +49,18 @@ type alias RollInstructions =
     }
 
 
+emptyInstructions : RollInstructions
+emptyInstructions =
+    { title = Nothing
+    , rollCount = Nothing
+    , total = Nothing
+    , dice = Nothing
+    , unique = False
+    , ignore = []
+    , modifier = Nothing
+    }
+
+
 type alias RollableRefData =
     { path : String, instructions : RollInstructions, title : Maybe String }
 
@@ -65,6 +77,16 @@ type RollableRef
     = Ref RollableRefData
     | BundleRef (WithBundle RollableRefData)
     | RolledTable (WithTableResult RollableRefData)
+
+
+updateBundle : WithBundle RollableRefData -> Bundle -> RollableRef
+updateBundle original result =
+    BundleRef { original | bundle = result }
+
+
+simpleRef : String -> RollableRef
+simpleRef path =
+    Ref { path = path, instructions = emptyInstructions, title = Nothing }
 
 
 type TableRollResult
@@ -128,7 +150,7 @@ rollResultForRollOnTable : List Row -> Int -> TableRollResult
 rollResultForRollOnTable rows rollTotal =
     case List.Extra.getAt (rollTotal - 1) rows of
         Just row ->
-            RolledRow { result = EvaluatedRow [] row.refs, rollTotal = rollTotal }
+            RolledRow { result = EvaluatedRow [ PlainText row.text ] row.refs, rollTotal = rollTotal }
 
         _ ->
             MissingRowError { rollTotal = rollTotal }

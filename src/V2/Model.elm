@@ -12,7 +12,7 @@ import Random
 import Search exposing (fuzzySearch)
 import Task
 import V2.Random exposing (rollOnRef)
-import V2.Rollable exposing (IndexPath, Registry, Rollable(..), RollableRef, refAtIndex)
+import V2.Rollable exposing (IndexPath, Registry, Rollable(..), RollableRef(..), emptyInstructions, refAtIndex, simpleRef)
 
 
 type alias Model =
@@ -126,15 +126,24 @@ update msg model =
         Roll rollWhere ->
             case rollWhere of
                 Reroll index ->
-                    case refAtIndex index model.results of
-                        Just ref ->
-                            ( model, Random.generate (DidRoll index) (rollOnRef ref) )
+                    case ( refAtIndex index model.results, model.registry ) of
+                        ( Just ref, TableDirectory registry ) ->
+                            ( model, Random.generate (DidRoll index) (rollOnRef registry ref) )
 
                         _ ->
                             ( model, Cmd.none )
 
                 SelectedTable ->
-                    ( model, Cmd.none )
+                    case ( selectedRef model, model.registry ) of
+                        ( Just ref, TableDirectory registry ) ->
+                            ( model
+                            , Random.generate
+                                RollNew
+                                (rollOnRef registry ref)
+                            )
+
+                        _ ->
+                            ( model, Cmd.none )
 
         DidRoll _ _ ->
             -- TODO: replace at index
@@ -247,15 +256,36 @@ handleSearchFieldKey key model =
     )
 
 
-selectedRollable : Model -> Maybe Rollable
-selectedRollable model =
+selectedRollablePath : Model -> Maybe String
+selectedRollablePath model =
     case model.registry of
-        TableDirectory dict ->
+        TableDirectory _ ->
             List.Extra.getAt model.searchResultOffset model.tableSearchResults
-                |> andThen (\k -> Dict.get k dict)
 
         _ ->
             Nothing
+
+
+rollableForPath : Model -> String -> Maybe Rollable
+rollableForPath model path =
+    case model.registry of
+        TableDirectory dict ->
+            Dict.get path dict
+
+        _ ->
+            Nothing
+
+
+selectedRollable : Model -> Maybe Rollable
+selectedRollable model =
+    selectedRollablePath model
+        |> Maybe.andThen (rollableForPath model)
+
+
+selectedRef : Model -> Maybe RollableRef
+selectedRef model =
+    selectedRollablePath model
+        |> Maybe.map simpleRef
 
 
 searchTables : String -> Model -> List String

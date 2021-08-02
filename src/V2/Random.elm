@@ -2,19 +2,22 @@ module V2.Random exposing (..)
 
 import Dice exposing (Die, Expr(..), FormulaTerm(..))
 import List exposing (sum)
-import Random exposing (Generator)
+import Maybe exposing (withDefault)
+import Random exposing (Generator, map)
 import Random.Extra
 import V2.Rollable
     exposing
         ( Bundle
+        , Registry
         , RollInstructions
         , RollableRef(..)
         , Row
         , TableRollResult
         , TableSource
-        , aRegistry
+        , findBundleSource
         , findTableSource
         , rollResultForRollOnTable
+        , updateBundle
         )
 
 
@@ -24,23 +27,29 @@ pickRowFromTable rows =
 
 
 rollOnTable : RollInstructions -> TableSource -> Generator TableRollResult
-rollOnTable _ source =
+rollOnTable instructions source =
+    let
+        dice =
+            instructions.dice |> withDefault source.dice
+    in
     -- TODO: obey instructions for rollCount > 1 (TBD: row ranges, reroll, unique)
-    pickRowFromTable source.rows
+    rollExpr dice
+        |> map evaluateExpr
+        |> map (rollResultForRollOnTable source.rows)
 
 
-rollOnBundle : Bundle -> Generator Bundle
-rollOnBundle bundle =
-    List.map rollOnRef bundle.tables
+rollOnBundle : Registry -> Bundle -> Generator Bundle
+rollOnBundle registry bundle =
+    List.map (rollOnRef registry) bundle.tables
         |> Random.Extra.sequence
         |> Random.map (\refs -> { bundle | tables = refs })
 
 
-rollOnRef : RollableRef -> Generator RollableRef
-rollOnRef r =
+rollOnRef : Registry -> RollableRef -> Generator RollableRef
+rollOnRef registry r =
     case r of
         Ref ref ->
-            case findTableSource aRegistry ref.path of
+            case findTableSource registry ref.path of
                 Just table ->
                     -- TODO: multiple rolls on table
                     rollOnTable ref.instructions table
@@ -56,20 +65,28 @@ rollOnRef r =
                             )
 
                 _ ->
-                    Random.constant r
+                    case findBundleSource registry ref.path of
+                        Just bundle ->
+                            rollOnBundle registry bundle
+                                |> Random.map
+                                    (\res ->
+                                        BundleRef
+                                            { bundle = res
+                                            , instructions = ref.instructions
+                                            , path = ref.path
+                                            , title = ref.title
+                                            }
+                                    )
+
+                        _ ->
+                            Debug.todo "unfindable table/bundle in registry"
 
         BundleRef ref ->
-            rollOnBundle ref.bundle
-                |> Random.map
-                    (\res ->
-                        BundleRef
-                            { ref
-                                | bundle = res
-                            }
-                    )
+            rollOnBundle registry (Debug.log "bundle" ref.bundle)
+                |> Random.map (updateBundle ref)
 
         _ ->
-            Random.constant r
+            Debug.todo "handle rolling a rolled ref"
 
 
 type alias ExprRoller =

@@ -8,7 +8,7 @@ import Dice
         )
 import Parse exposing (ParsedRow(..), expression, formulaTerm, row)
 import Parser
-import V2.Rollable exposing (RollInstructions, Rollable(..), RollableRef(..), RollableRefData, Row, TableSource, Variable(..))
+import V2.Rollable exposing (RollInstructions, Rollable(..), RollableRef(..), RollableRefData, Row, Variable(..))
 import Yaml.Decode exposing (Decoder, andMap, andThen, bool, fail, field, list, map, map2, map3, maybe, oneOf, string, succeed)
 
 
