@@ -1,16 +1,39 @@
 module V2.Model exposing (..)
 
+import Debounce exposing (Debounce)
 import Dict
 import Http
+import KeyPress exposing (KeyValue)
 import List exposing (map)
+import List.Extra
 import Loader exposing (RollableLoadResult, loadTable)
+import Maybe exposing (andThen, withDefault)
 import Random
+import Search exposing (fuzzySearch)
+import Task
 import V2.Random exposing (rollOnRef)
 import V2.Rollable exposing (IndexPath, Registry, Rollable(..), RollableRef, refAtIndex)
 
 
 type alias Model =
-    { results : List RollableRef, registry : TableDirectoryState }
+    { results : List RollableRef
+    , registry : TableDirectoryState
+    , tableSearchInput : String
+    , tableSearchResults : List String
+    , inSearchField : Bool
+    , searchResultOffset : Int
+    , debounce : Debounce String
+    }
+
+
+type Roll
+    = SelectedTable
+    | Reroll IndexPath
+
+
+maxResults : Int
+maxResults =
+    10
 
 
 
@@ -52,8 +75,7 @@ loadedTable model result =
                 1 ->
                     { model
                         | registry = TableDirectory (newDirectoryUpdate dict)
-
-                        -- , tableSearchResults = searchTables "" model
+                        , tableSearchResults = searchTables "" model
                     }
 
                 _ ->
@@ -71,12 +93,27 @@ type TableDirectoryState
 
 
 type Msg
-    = Roll IndexPath
+    = Roll Roll
     | DidRoll IndexPath RollableRef
     | RollNew RollableRef
     | GotDirectory (Result Http.Error (List String))
     | LoadTable String
     | LoadedTable String RollableLoadResult
+    | InputTableSearch String
+    | StartTableSearch String
+    | DebounceMsg Debounce.Msg
+    | KeyPressTableSearch KeyValue
+    | TableSearchFocus Bool
+
+
+{-| This defines how the debouncer should work.
+Choose the strategy for your use case.
+-}
+debounceConfig : Debounce.Config Msg
+debounceConfig =
+    { strategy = Debounce.later 200
+    , transform = DebounceMsg
+    }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -86,12 +123,17 @@ update msg model =
             Debug.log "message" msg
     in
     case msg of
-        Roll index ->
-            case refAtIndex index model.results of
-                Just ref ->
-                    ( model, Random.generate (DidRoll index) (rollOnRef ref) )
+        Roll rollWhere ->
+            case rollWhere of
+                Reroll index ->
+                    case refAtIndex index model.results of
+                        Just ref ->
+                            ( model, Random.generate (DidRoll index) (rollOnRef ref) )
 
-                _ ->
+                        _ ->
+                            ( model, Cmd.none )
+
+                SelectedTable ->
                     ( model, Cmd.none )
 
         DidRoll _ _ ->
@@ -116,3 +158,111 @@ update msg model =
 
         LoadedTable _ result ->
             ( loadedTable model result, Cmd.none )
+
+        InputTableSearch input ->
+            let
+                ( debounce, cmd ) =
+                    Debounce.push debounceConfig input model.debounce
+            in
+            ( { model
+                | debounce = debounce
+              }
+            , cmd
+            )
+
+        DebounceMsg msg_ ->
+            let
+                ( debounce, cmd ) =
+                    Debounce.update
+                        debounceConfig
+                        (Debounce.takeLast startTableSearch)
+                        msg_
+                        model.debounce
+            in
+            ( { model | debounce = debounce }
+            , cmd
+            )
+
+        StartTableSearch s ->
+            ( { model
+                | tableSearchResults = searchTables s model
+                , tableSearchInput = s
+                , searchResultOffset = 0
+              }
+            , Cmd.none
+            )
+
+        KeyPressTableSearch key ->
+            if model.inSearchField then
+                handleSearchFieldKey key model
+
+            else
+                ( model, Cmd.none )
+
+        TableSearchFocus focus ->
+            ( { model | inSearchField = focus }, Cmd.none )
+
+
+startTableSearch : String -> Cmd Msg
+startTableSearch s =
+    Task.perform StartTableSearch (Task.succeed s)
+
+
+offsetForKeyPress : String -> Maybe Int
+offsetForKeyPress keyDesc =
+    case keyDesc of
+        "ArrowDown" ->
+            Just 1
+
+        "ArrowUp" ->
+            Just -1
+
+        _ ->
+            Nothing
+
+
+handleSearchFieldKey : KeyValue -> Model -> ( Model, Cmd Msg )
+handleSearchFieldKey key model =
+    ( case key of
+        KeyPress.Control keyDesc ->
+            withDefault
+                model
+                (offsetForKeyPress keyDesc
+                    |> Maybe.map (\offset -> { model | searchResultOffset = modBy maxResults (model.searchResultOffset + offset) })
+                )
+
+        _ ->
+            model
+    , case key of
+        KeyPress.Control keyDesc ->
+            case keyDesc of
+                "Enter" ->
+                    Task.perform (\_ -> Roll SelectedTable) (Task.succeed Nothing)
+
+                _ ->
+                    Cmd.none
+
+        _ ->
+            Cmd.none
+    )
+
+
+selectedRollable : Model -> Maybe Rollable
+selectedRollable model =
+    case model.registry of
+        TableDirectory dict ->
+            List.Extra.getAt model.searchResultOffset model.tableSearchResults
+                |> andThen (\k -> Dict.get k dict)
+
+        _ ->
+            Nothing
+
+
+searchTables : String -> Model -> List String
+searchTables tableSearchInput model =
+    case model.registry of
+        TableDirectory dict ->
+            fuzzySearch (Dict.keys dict) tableSearchInput
+
+        _ ->
+            []

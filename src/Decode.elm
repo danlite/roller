@@ -198,11 +198,11 @@ finalize path yamlFile =
     case yamlFile of
         YamlTable table ->
             RollableTable
-                { rows =
-                    finalizeRows table.rows
+                { rows = finalizeRows table.rows
                 , inputs = []
                 , path = path
                 , title = table.title
+                , dice = table.dice
                 }
 
         YamlBundle bundle ->

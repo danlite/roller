@@ -77,6 +77,7 @@ type alias TableSource =
     , inputs : List RollableRef
     , path : String
     , title : String
+    , dice : Expr
     }
 
 

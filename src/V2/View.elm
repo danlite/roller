@@ -1,12 +1,16 @@
 module V2.View exposing (..)
 
-import Html exposing (Attribute, Html, button, div, text)
-import Html.Attributes exposing (attribute, class, style)
-import Html.Events exposing (onClick)
+import Dice exposing (Expr(..))
+import Dict
+import Html exposing (Attribute, Html, button, div, input, span, text)
+import Html.Attributes exposing (attribute, class, placeholder, style)
+import Html.Events exposing (onBlur, onClick, onFocus, onInput)
 import List.Extra
+import Maybe exposing (withDefault)
+import Parser
 import String exposing (fromInt)
-import V2.Model exposing (Model, Msg(..))
-import V2.Rollable exposing (EvaluatedRow, IndexPath, RollableRef(..), Row, TableRollResult(..))
+import V2.Model exposing (Model, Msg(..), Roll(..), TableDirectoryState(..), maxResults, rollablePath, selectedRollable)
+import V2.Rollable exposing (EvaluatedRow, IndexPath, Rollable(..), RollableRef(..), Row, TableRollResult(..))
 
 
 refRollableTitle : RollableRef -> String
@@ -37,7 +41,7 @@ rollableRefPath r =
 
 rollButton : IndexPath -> String -> Html Msg
 rollButton index label =
-    button [ onClick (Roll index) ] [ text label ]
+    button [ onClick (Roll (Reroll index)) ] [ text label ]
 
 
 rollableRefView : IndexPath -> RollableRef -> Html Msg
@@ -152,6 +156,102 @@ rowView index rollTotal row =
         )
 
 
+resultsView : List RollableRef -> Html Msg
+resultsView results =
+    div []
+        (mapChildIndexes
+            []
+            rollableRefView
+            results
+        )
+
+
 view : Model -> Html Msg
 view model =
-    div [] (mapChildIndexes [] rollableRefView model.results)
+    div []
+        [ tableSearch model
+        , button [ onClick (Roll SelectedTable) ] [ text (rollButtonText model) ]
+        , resultsView model.results
+        ]
+
+
+tableSearch : Model -> Html Msg
+tableSearch model =
+    case model.registry of
+        TableDirectoryLoading ->
+            text "Loading..."
+
+        TableDirectoryFailed e ->
+            text ("Error! " ++ e)
+
+        TableLoadingProgress _ dict ->
+            text ("Loaded " ++ fromInt (Dict.size dict) ++ " tables...")
+
+        TableDirectory _ ->
+            div []
+                [ input
+                    [ placeholder "Table search"
+                    , onInput InputTableSearch
+                    , onFocus (TableSearchFocus True)
+                    , onBlur (TableSearchFocus False)
+                    ]
+                    []
+                , div []
+                    (List.map
+                        (\path ->
+                            div []
+                                [ span
+                                    [ style "visibility"
+                                        (if Just path == Maybe.map rollablePath (selectedRollable model) then
+                                            ""
+
+                                         else
+                                            "hidden"
+                                        )
+                                    ]
+                                    [ text "→ " ]
+                                , text path
+                                ]
+                        )
+                        (List.take maxResults model.tableSearchResults)
+                    )
+                ]
+
+
+formulaTermString : Result (List Parser.DeadEnd) Expr -> String
+formulaTermString t =
+    case t of
+        Err x ->
+            Debug.toString x
+
+        Ok expr ->
+            case expr of
+                Term term ->
+                    Dice.formulaTermString term
+
+                Add e1 e2 ->
+                    String.join "+" [ formulaTermString (Ok e1), formulaTermString (Ok e2) ]
+
+                Sub e1 e2 ->
+                    String.join "-" [ formulaTermString (Ok e1), formulaTermString (Ok e2) ]
+
+
+rollButtonTextForRollable : Rollable -> String
+rollButtonTextForRollable rollable =
+    case rollable of
+        RollableTable table ->
+            "Roll " ++ formulaTermString (Ok table.dice)
+
+        RollableBundle _ ->
+            "Roll bundle"
+
+        _ ->
+            ""
+
+
+rollButtonText : Model -> String
+rollButtonText model =
+    withDefault "Select a table first"
+        (selectedRollable model
+            |> Maybe.map rollButtonTextForRollable
+        )
