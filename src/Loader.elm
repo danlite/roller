@@ -3,10 +3,14 @@ module Loader exposing (..)
 import Decode exposing (decoder)
 import Http
 import Json.Decode as J
-import Msg exposing (Msg(..))
 import String exposing (dropLeft, startsWith)
 import Url.Builder exposing (crossOrigin)
+import V2.Rollable exposing (Rollable)
 import Yaml.Decode
+
+
+type alias RollableLoadResult =
+    Result Http.Error (Result Yaml.Decode.Error Rollable)
 
 
 directoryServerUrlRoot : String
@@ -23,17 +27,21 @@ withoutLeadingSlash str =
         str
 
 
-getDirectory : Cmd Msg
-getDirectory =
+getDirectory : (Result Http.Error (List String) -> msg) -> Cmd msg
+getDirectory message =
     Http.get
         { url = directoryServerUrlRoot
-        , expect = Http.expectJson GotDirectory (J.field "directory" (J.list J.string))
+        , expect = Http.expectJson message (J.field "directory" (J.list J.string))
         }
 
 
-decodeTableHttpResult : String -> Result Http.Error String -> Msg
-decodeTableHttpResult path result =
-    LoadedTable path
+decodeTableHttpResult :
+    (String -> RollableLoadResult -> msg)
+    -> String
+    -> Result Http.Error String
+    -> msg
+decodeTableHttpResult message path result =
+    message path
         (case result of
             Err err ->
                 Err err
@@ -50,9 +58,9 @@ decodeTableHttpResult path result =
         )
 
 
-loadTable : String -> Cmd Msg
-loadTable path =
+loadTable : (String -> RollableLoadResult -> msg) -> String -> Cmd msg
+loadTable message path =
     Http.get
         { url = crossOrigin directoryServerUrlRoot [ withoutLeadingSlash path ] []
-        , expect = Http.expectString (decodeTableHttpResult path)
+        , expect = Http.expectString (decodeTableHttpResult message path)
         }

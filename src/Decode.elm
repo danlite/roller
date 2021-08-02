@@ -1,8 +1,14 @@
 module Decode exposing (..)
 
-import Dice exposing (Expr(..), FormulaTerm(..), RegisteredRollable, Rollable(..), Row, Table, TableRef, Variable(..), makeSingleRange)
+import Dice
+    exposing
+        ( Expr(..)
+        , FormulaTerm(..)
+        , makeSingleRange
+        )
 import Parse exposing (ParsedRow(..), expression, formulaTerm, row)
 import Parser
+import V2.Rollable exposing (RollInstructions, Rollable(..), RollableRef(..), RollableRefData, Row, TableSource, Variable(..))
 import Yaml.Decode exposing (Decoder, andMap, andThen, bool, fail, field, list, map, map2, map3, maybe, oneOf, string, succeed)
 
 
@@ -36,10 +42,17 @@ exprDecoder =
             )
 
 
-tableRefDecoder : Decoder TableRef
+tableRefDecoder : Decoder RollableRefData
 tableRefDecoder =
-    succeed TableRef
+    succeed RollableRefData
         |> andMap (field "path" string)
+        |> andMap rollInstructionsDecoder
+        |> andMap (succeed Nothing)
+
+
+rollInstructionsDecoder : Decoder RollInstructions
+rollInstructionsDecoder =
+    succeed RollInstructions
         |> andMap (maybe (field "title" string))
         |> andMap (maybe (field "rollCount" variableDecoder))
         |> andMap (maybe (field "total" variableDecoder))
@@ -51,7 +64,7 @@ tableRefDecoder =
 
 type YamlRow
     = ContentRow ParsedRow
-    | MetaRow TableRef
+    | MetaRow RollableRefData
 
 
 type alias YamlTableFields =
@@ -63,7 +76,7 @@ type alias YamlTableFields =
 
 type alias YamlBundleFields =
     { title : String
-    , tables : List TableRef
+    , tables : List RollableRefData
     }
 
 
@@ -141,24 +154,24 @@ updateLastItem update aList =
             List.reverse (update last :: remainder)
 
 
-addTableRefToRow : TableRef -> Row -> Row
-addTableRefToRow tableRef row =
-    { row | tableRefs = row.tableRefs ++ [ tableRef ] }
+addRollableRefToRow : RollableRef -> Row -> Row
+addRollableRefToRow ref row =
+    { row | refs = row.refs ++ [ ref ] }
 
 
-addTableRefToLastRow : TableRef -> List Row -> List Row
-addTableRefToLastRow tableRef rows =
-    updateLastItem (addTableRefToRow tableRef) rows
+addTableRefToLastRow : RollableRef -> List Row -> List Row
+addTableRefToLastRow ref rows =
+    updateLastItem (addRollableRefToRow ref) rows
 
 
 finalizeRow : Int -> ParsedRow -> Row
 finalizeRow rowNumber contentRow =
     case contentRow of
         SimpleRow content ->
-            Row (makeSingleRange rowNumber) content []
+            Row content (makeSingleRange rowNumber) []
 
         RangedRow range content ->
-            Row range content []
+            Row content range []
 
 
 gatherRows : YamlRow -> ( Int, List Row ) -> ( Int, List Row )
@@ -172,7 +185,7 @@ gatherRows newRow ( rowCount, rows ) =
             ( newRowCount, rows ++ [ finalizeRow newRowCount contentRow ] )
 
         MetaRow tableRef ->
-            ( rowCount, addTableRefToLastRow tableRef rows )
+            ( rowCount, addTableRefToLastRow (Ref tableRef) rows )
 
 
 finalizeRows : List YamlRow -> List Row
@@ -180,22 +193,24 @@ finalizeRows rows =
     Tuple.second (List.foldl gatherRows ( 0, [] ) rows)
 
 
-finalize : String -> YamlFile -> RegisteredRollable
+finalize : String -> YamlFile -> Rollable
 finalize path yamlFile =
     case yamlFile of
         YamlTable table ->
-            RegisteredRollable
-                path
-                (RollableTable
-                    (Table
-                        (finalizeRows table.rows)
-                        table.title
-                        table.dice
-                    )
-                )
+            RollableTable
+                { rows =
+                    finalizeRows table.rows
+                , inputs = []
+                , path = path
+                , title = table.title
+                }
 
         YamlBundle bundle ->
-            RegisteredRollable path (RollableBundle bundle)
+            RollableBundle
+                { path = path
+                , tables = List.map Ref bundle.tables
+                , title = bundle.title
+                }
 
 
 type alias RowParseResult =

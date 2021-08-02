@@ -1,12 +1,12 @@
 module Registry exposing (FindErr(..), FindResult, Registry, findTable, map)
 
-import Dice exposing (RegisteredRollable, ResolvedBundle)
 import Dict exposing (Dict)
 import Result exposing (andThen, fromMaybe)
+import V2.Rollable exposing (Rollable)
 
 
 type alias Registry =
-    Dict String RegisteredRollable
+    Dict String Rollable
 
 
 type Finder a
@@ -26,7 +26,7 @@ fail err =
     Finder (\_ -> Err err)
 
 
-findTable : String -> Finder RegisteredRollable
+findTable : String -> Finder Rollable
 findTable path =
     Finder (\reg -> fromMaybe (NotFound path) (Dict.get path reg))
 
