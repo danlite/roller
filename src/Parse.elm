@@ -2,7 +2,7 @@ module Parse exposing (..)
 
 import Char exposing (isDigit)
 import Dice exposing (Expr(..), FormulaTerm(..), Range, makeRange, makeSingleRange)
-import Parser exposing ((|.), (|=), Parser, andThen, getChompedString, int, lazy, map, oneOf, spaces, succeed, symbol)
+import Parser exposing ((|.), (|=), Parser, andThen, backtrackable, getChompedString, int, lazy, map, oneOf, spaces, succeed, symbol)
 import String exposing (toInt)
 
 
@@ -151,11 +151,9 @@ parseRangeMember =
 
 parseRange : Parser RangeParseResult
 parseRange =
-    Parser.oneOf
-        [ succeed identity
-            |= parseRangeMember
-            |> andThen parseRangeEnd
-        ]
+    succeed identity
+        |= parseRangeMember
+        |> andThen parseRangeEnd
 
 
 rangeDivider : Parser ()
@@ -186,15 +184,21 @@ rangeResultParser result =
             Parser.succeed n
 
 
+rangedRowParser : Parser ParsedRow
+rangedRowParser =
+    succeed RangedRow
+        -- fails here if it's a plain text row beginning with a digit!
+        |= (parseRange
+                |> andThen rangeResultParser
+           )
+        |. symbol "|"
+        |= (getChompedString <| succeed identity |= Parser.chompUntilEndOr "\n")
+
+
 row : Parser ParsedRow
 row =
     oneOf
-        [ Parser.succeed RangedRow
-            |= (parseRange
-                    |> andThen rangeResultParser
-               )
-            |. symbol "|"
-            |= (getChompedString <| succeed identity |= Parser.chompUntilEndOr "\n")
+        [ backtrackable rangedRowParser
         , succeed SimpleRow
             |= (getChompedString <| succeed identity |= Parser.chompUntilEndOr "\n")
         ]

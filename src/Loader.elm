@@ -10,7 +10,7 @@ import Yaml.Decode
 
 
 type alias RollableLoadResult =
-    Result Http.Error (Result Yaml.Decode.Error Rollable)
+    Result Http.Error (Result String Rollable)
 
 
 directoryServerUrlRoot : String
@@ -48,12 +48,19 @@ decodeTableHttpResult message path result =
 
             Ok yamlStr ->
                 Ok
-                    (Yaml.Decode.fromString
-                        (Yaml.Decode.map
-                            (Decode.finalize (Debug.log "path" path))
-                            decoder
-                        )
-                        (Debug.log "str" yamlStr)
+                    (case
+                        Yaml.Decode.fromString
+                            (Yaml.Decode.map
+                                (Decode.finalize path)
+                                decoder
+                            )
+                            yamlStr
+                     of
+                        Ok x ->
+                            Ok x
+
+                        Err e ->
+                            Err (path ++ "\n" ++ Debug.toString e)
                     )
         )
 

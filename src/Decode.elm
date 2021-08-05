@@ -4,11 +4,13 @@ import Dice
     exposing
         ( Expr(..)
         , FormulaTerm(..)
+        , Range
         , makeSingleRange
+        , rangeMembers
         )
-import Parse exposing (ParsedRow(..), expression, formulaTerm, row)
+import Parse exposing (ParsedRow(..), row)
 import Parser
-import V2.Rollable exposing (RollInstructions, Rollable(..), RollableRef(..), RollableRefData, Row, Variable(..))
+import V2.Rollable exposing (RollInstructions, Rollable(..), RollableRef(..), RollableRefData, Row, UnresolvedRollableRefData, Variable(..), resolvePathInContext)
 import Yaml.Decode exposing (Decoder, andMap, andThen, bool, fail, field, list, map, map2, map3, maybe, oneOf, string, succeed)
 
 
@@ -28,9 +30,43 @@ variableDecoder =
         ]
 
 
+type RowIndexVariable
+    = RowIndexConstValue Int
+    | RowIndexRangeValue Range
+    | RowIndexVariableValue String
+
+
+decodeRange : Decoder Range
+decodeRange =
+    map (Parser.run Parse.parseRange) string
+        |> andThen
+            (\res ->
+                case res of
+                    Err e ->
+                        fail ("Range parsing failed: " ++ Debug.toString e)
+
+                    Ok r ->
+                        case r of
+                            Err e ->
+                                fail ("Range parsing failed 2: " ++ Debug.toString e)
+
+                            Ok range ->
+                                succeed range
+            )
+
+
+rowIndexVariableDecoder : Decoder RowIndexVariable
+rowIndexVariableDecoder =
+    oneOf
+        [ map RowIndexConstValue Yaml.Decode.int
+        , map RowIndexRangeValue decodeRange
+        , map RowIndexVariableValue string
+        ]
+
+
 exprDecoder : Decoder Expr
 exprDecoder =
-    map (Parser.run formulaTerm) string
+    map (Parser.run Parse.expression) string
         |> andThen
             (\res ->
                 case res of
@@ -42,12 +78,38 @@ exprDecoder =
             )
 
 
-tableRefDecoder : Decoder RollableRefData
-tableRefDecoder =
-    succeed RollableRefData
+unresolvedTableRefDecoder : Decoder UnresolvedRollableRefData
+unresolvedTableRefDecoder =
+    succeed UnresolvedRollableRefData
         |> andMap (field "path" string)
         |> andMap rollInstructionsDecoder
         |> andMap (succeed Nothing)
+
+
+resolveTableRef : String -> UnresolvedRollableRefData -> RollableRefData
+resolveTableRef contextPath unresolved =
+    RollableRefData
+        (resolvePathInContext unresolved.path contextPath)
+        unresolved.instructions
+        unresolved.title
+
+
+flattenRowIndexVariables : List RowIndexVariable -> List Variable
+flattenRowIndexVariables rowVars =
+    rowVars
+        |> List.map
+            (\riv ->
+                case riv of
+                    RowIndexConstValue c ->
+                        [ ConstValue c ]
+
+                    RowIndexVariableValue v ->
+                        [ ContextKey v ]
+
+                    RowIndexRangeValue r ->
+                        rangeMembers r |> List.map ConstValue
+            )
+        |> List.concat
 
 
 rollInstructionsDecoder : Decoder RollInstructions
@@ -58,25 +120,31 @@ rollInstructionsDecoder =
         |> andMap (maybe (field "total" variableDecoder))
         |> andMap (maybe (field "dice" exprDecoder))
         |> andMap (oneOf [ field "unique" bool, succeed False ])
-        |> andMap (oneOf [ field "ignore" (listWrapDecoder variableDecoder), succeed [] ])
+        |> andMap
+            (oneOf
+                [ field "ignore" (listWrapDecoder rowIndexVariableDecoder)
+                    |> map flattenRowIndexVariables
+                , succeed []
+                ]
+            )
         |> andMap (maybe (field "modifier" variableDecoder))
 
 
 type YamlRow
     = ContentRow ParsedRow
-    | MetaRow RollableRefData
+    | MetaRow UnresolvedRollableRefData
 
 
 type alias YamlTableFields =
     { title : String
-    , dice : Expr
+    , dice : Maybe Expr
     , rows : List YamlRow
     }
 
 
 type alias YamlBundleFields =
     { title : String
-    , tables : List RollableRefData
+    , tables : List UnresolvedRollableRefData
     }
 
 
@@ -94,7 +162,7 @@ rowDecoder =
                 string
                 |> andThen parsedRowDecoder
             )
-        , map MetaRow tableRefDecoder
+        , map MetaRow unresolvedTableRefDecoder
         ]
 
 
@@ -113,15 +181,16 @@ tableDecoder =
                 (\maybeStr ->
                     case maybeStr of
                         Nothing ->
-                            map diceFromRowList (field "rows" (list string))
+                            -- map diceFromRowList (field "rows" (list string))
+                            succeed Nothing
 
                         Just str ->
-                            case Parser.run expression str of
+                            case Parser.run Parse.expression str of
                                 Err e ->
                                     fail ("Parsing dice failed: " ++ Debug.toString e)
 
                                 Ok d ->
-                                    succeed d
+                                    succeed (Just d)
                 )
         )
         (field "rows"
@@ -135,7 +204,7 @@ bundleDecoder =
     map2
         YamlBundleFields
         (field "title" string)
-        (field "tables" (list tableRefDecoder))
+        (field "tables" (list unresolvedTableRefDecoder))
         |> map YamlBundle
 
 
@@ -174,8 +243,8 @@ finalizeRow rowNumber contentRow =
             Row content range []
 
 
-gatherRows : YamlRow -> ( Int, List Row ) -> ( Int, List Row )
-gatherRows newRow ( rowCount, rows ) =
+gatherRows : String -> YamlRow -> ( Int, List Row ) -> ( Int, List Row )
+gatherRows contextPath newRow ( rowCount, rows ) =
     case newRow of
         ContentRow contentRow ->
             let
@@ -185,30 +254,40 @@ gatherRows newRow ( rowCount, rows ) =
             ( newRowCount, rows ++ [ finalizeRow newRowCount contentRow ] )
 
         MetaRow tableRef ->
-            ( rowCount, addTableRefToLastRow (Ref tableRef) rows )
+            ( rowCount, addTableRefToLastRow (resolveTableRef contextPath tableRef |> Ref) rows )
 
 
-finalizeRows : List YamlRow -> List Row
-finalizeRows rows =
-    Tuple.second (List.foldl gatherRows ( 0, [] ) rows)
+finalizeRows : String -> List YamlRow -> List Row
+finalizeRows contextPath rows =
+    Tuple.second (List.foldl (gatherRows contextPath) ( 0, [] ) rows)
 
 
 finalize : String -> YamlFile -> Rollable
 finalize path yamlFile =
     case yamlFile of
         YamlTable table ->
+            let
+                rows =
+                    finalizeRows path table.rows
+            in
             RollableTable
-                { rows = finalizeRows table.rows
+                { rows = rows
                 , inputs = []
                 , path = path
                 , title = table.title
-                , dice = table.dice
+                , dice =
+                    case table.dice of
+                        Just d ->
+                            d
+
+                        _ ->
+                            diceFromRowList rows
                 }
 
         YamlBundle bundle ->
             RollableBundle
                 { path = path
-                , tables = List.map Ref bundle.tables
+                , tables = List.map (resolveTableRef path >> Ref) bundle.tables
                 , title = bundle.title
                 }
 

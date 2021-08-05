@@ -7,17 +7,19 @@ import KeyPress exposing (KeyValue)
 import List exposing (map)
 import List.Extra
 import Loader exposing (RollableLoadResult, loadTable)
-import Maybe exposing (andThen, withDefault)
+import Maybe exposing (withDefault)
 import Random
 import Search exposing (fuzzySearch)
 import Task
 import V2.Random exposing (rollOnRef)
-import V2.Rollable exposing (IndexPath, Registry, Rollable(..), RollableRef(..), emptyInstructions, refAtIndex, simpleRef)
+import V2.Rollable exposing (IndexPath, Registry, Rollable(..), RollableRef(..), refAtIndex, replaceAtIndex, simpleRef)
+import V2.Scroll exposing (jumpToBottom)
 
 
 type alias Model =
     { results : List RollableRef
     , registry : TableDirectoryState
+    , tableSearchFieldText : String
     , tableSearchInput : String
     , tableSearchResults : List String
     , inSearchField : Bool
@@ -64,7 +66,7 @@ loadedTable model result =
                             Dict.insert (rollablePath rollable) rollable
 
                         Err e ->
-                            Debug.log ("decodeResult! " ++ Debug.toString e) identity
+                            Debug.log ("decodeResult! " ++ e) identity
 
                 _ ->
                     identity
@@ -93,7 +95,8 @@ type TableDirectoryState
 
 
 type Msg
-    = Roll Roll
+    = NoOp
+    | Roll Roll
     | DidRoll IndexPath RollableRef
     | RollNew RollableRef
     | GotDirectory (Result Http.Error (List String))
@@ -120,9 +123,23 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
         _ =
-            Debug.log "message" msg
+            case msg of
+                GotDirectory _ ->
+                    msg
+
+                LoadedTable _ _ ->
+                    msg
+
+                LoadTable _ ->
+                    msg
+
+                _ ->
+                    Debug.log "message" msg
     in
     case msg of
+        NoOp ->
+            ( model, Cmd.none )
+
         Roll rollWhere ->
             case rollWhere of
                 Reroll index ->
@@ -131,7 +148,7 @@ update msg model =
                             ( model, Random.generate (DidRoll index) (rollOnRef registry ref) )
 
                         _ ->
-                            ( model, Cmd.none )
+                            ( model, Debug.log "none found!" Cmd.none )
 
                 SelectedTable ->
                     case ( selectedRef model, model.registry ) of
@@ -145,12 +162,11 @@ update msg model =
                         _ ->
                             ( model, Cmd.none )
 
-        DidRoll _ _ ->
-            -- TODO: replace at index
-            ( model, Cmd.none )
+        DidRoll index ref ->
+            ( { model | results = replaceAtIndex index ref model.results }, Cmd.none )
 
-        RollNew _ ->
-            ( model, Cmd.none )
+        RollNew ref ->
+            ( { model | results = model.results ++ [ ref ] }, jumpToBottom NoOp )
 
         GotDirectory result ->
             case result of
@@ -175,6 +191,7 @@ update msg model =
             in
             ( { model
                 | debounce = debounce
+                , tableSearchFieldText = input
               }
             , cmd
             )

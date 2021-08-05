@@ -1,7 +1,7 @@
 module V2.Mocks exposing (..)
 
 import Dice exposing (Range)
-import V2.Rollable exposing (Bundle, RollInstructions, RollableRef(..), RollableText(..), Row, TableRollResult(..))
+import V2.Rollable exposing (Bundle, Path(..), RollInstructions, RollableRef(..), RollableText(..), Row, TableRollResult(..))
 
 
 mockRow : Row
@@ -19,7 +19,7 @@ mockRolledRow refs =
 
 mockRolledTable : String -> String -> List TableRollResult -> RollableRef
 mockRolledTable path title result =
-    RolledTable { path = path, instructions = mockRollInstructions, result = result, title = title }
+    RolledTable { path = ResolvedPath path, instructions = mockRollInstructions, result = result, title = title }
 
 
 mockRollInstructions : RollInstructions
@@ -37,7 +37,7 @@ mockRollInstructions =
 mockTableRef : String -> RollableRef
 mockTableRef path =
     Ref
-        { path = path
+        { path = ResolvedPath path
         , instructions = mockRollInstructions
         , title = Nothing
         }
@@ -45,7 +45,7 @@ mockTableRef path =
 
 mockBundleRef : String -> List RollableRef -> RollableRef
 mockBundleRef path tables =
-    BundleRef { bundle = mockBundle path tables, path = path, instructions = mockRollInstructions, title = Nothing }
+    BundleRef { bundle = mockBundle path tables, path = ResolvedPath path, instructions = mockRollInstructions, title = Nothing }
 
 
 mockBundle : String -> List RollableRef -> Bundle
@@ -68,6 +68,9 @@ mockBundle path tables =
                 [1.1.1] RollableRef.RolledTable
                     - Row
                         [1.1.1.0] RollableRef.TableRef
+                        [1.1.1.1] RollableRef.TableRef
+                    - Row
+                        [1.1.1.2] RollableRef.TableRef
    [2] RollableRef.Bundle
        [^] Bundle
            [2.0] RollableRef.TableRef
@@ -75,8 +78,8 @@ mockBundle path tables =
 -}
 
 
-initialModel : List RollableRef
-initialModel =
+mockResults : List RollableRef
+mockResults =
     [ mockRolledTable "/a/b/c"
         "ABC"
         [ mockRolledRow [] ]
@@ -94,6 +97,10 @@ initialModel =
                     "PQR"
                     [ mockRolledRow
                         [ mockTableRef "/s/t/u"
+                        , mockTableRef "/y/z/a"
+                        ]
+                    , mockRolledRow
+                        [ mockTableRef "/b/c/d"
                         ]
                     ]
                 ]

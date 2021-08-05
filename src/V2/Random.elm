@@ -1,10 +1,10 @@
 module V2.Random exposing (..)
 
-import Dice exposing (Die, Expr(..), FormulaTerm(..))
+import Dice exposing (Die, Expr(..), FormulaTerm(..), rangeMembers)
 import List exposing (sum)
 import Maybe exposing (withDefault)
-import Random exposing (Generator, map)
-import Random.Extra
+import Random exposing (Generator, andThen, map)
+import Random.Extra exposing (sequence)
 import V2.Rollable
     exposing
         ( Bundle
@@ -12,10 +12,12 @@ import V2.Rollable
         , RollInstructions
         , RollableRef(..)
         , Row
-        , TableRollResult
+        , TableRollResult(..)
         , TableSource
+        , Variable(..)
         , findBundleSource
         , findTableSource
+        , pathString
         , rollResultForRollOnTable
         , updateBundle
         )
@@ -26,16 +28,96 @@ pickRowFromTable rows =
     Random.map (rollResultForRollOnTable rows) (Random.int 1 (List.length rows))
 
 
-rollOnTable : RollInstructions -> TableSource -> Generator TableRollResult
-rollOnTable instructions source =
+evaluateVariable : a -> Variable -> Int
+evaluateVariable context variable =
+    case variable of
+        ConstValue v ->
+            v
+
+        ContextKey k ->
+            Debug.todo ("evaluate context key: " ++ k)
+
+
+rollResultNumber : TableRollResult -> Int
+rollResultNumber res =
+    case res of
+        RolledRow r ->
+            r.rollTotal
+
+        MissingRowError err ->
+            err.rollTotal
+
+
+siblingResultNumbers : TableRollResult -> List Int
+siblingResultNumbers res =
+    case res of
+        RolledRow r ->
+            rangeMembers r.range
+
+        MissingRowError err ->
+            [ err.rollTotal ]
+
+
+rollOnTable : TableSource -> RollInstructions -> Generator (List TableRollResult)
+rollOnTable source instructions =
+    let
+        rollCount =
+            evaluateVariable {} (withDefault (ConstValue 1) instructions.rollCount)
+
+        doRoll =
+            rollSingleRowOnTable source
+    in
+    doRoll instructions
+        |> andThen
+            (\r ->
+                if rollCount == 1 then
+                    Random.constant r
+                        |> List.singleton
+                        |> sequence
+
+                else
+                    let
+                        modifiedInstructions =
+                            { instructions
+                                | rollCount = Just (ConstValue (rollCount - 1))
+                                , ignore =
+                                    if instructions.unique then
+                                        instructions.ignore ++ (siblingResultNumbers r |> List.map ConstValue)
+
+                                    else
+                                        instructions.ignore
+                            }
+                    in
+                    Random.constant r
+                        :: (doRoll (Debug.log "modifiedInstructions" modifiedInstructions) |> List.singleton)
+                        |> sequence
+            )
+
+
+rollSingleRowOnTable : TableSource -> RollInstructions -> Generator TableRollResult
+rollSingleRowOnTable source instructions =
     let
         dice =
             instructions.dice |> withDefault source.dice
+
+        ignore =
+            instructions.ignore |> List.map (evaluateVariable {})
     in
-    -- TODO: obey instructions for rollCount > 1 (TBD: row ranges, reroll, unique)
     rollExpr dice
         |> map evaluateExpr
         |> map (rollResultForRollOnTable source.rows)
+        |> andThen
+            (\r ->
+                let
+                    rollNumber =
+                        rollResultNumber r
+                in
+                if List.member (Debug.log "rollNumber" rollNumber) ignore then
+                    rollSingleRowOnTable source instructions
+
+                else
+                    Random.constant r
+            )
 
 
 rollOnBundle : Registry -> Bundle -> Generator Bundle
@@ -45,22 +127,30 @@ rollOnBundle registry bundle =
         |> Random.map (\refs -> { bundle | tables = refs })
 
 
+otherwiseMaybe : Maybe a -> Maybe a -> Maybe a
+otherwiseMaybe value fallback =
+    case value of
+        Nothing ->
+            fallback
+
+        _ ->
+            value
+
+
 rollOnRef : Registry -> RollableRef -> Generator RollableRef
 rollOnRef registry r =
     case r of
         Ref ref ->
             case findTableSource registry ref.path of
                 Just table ->
-                    -- TODO: multiple rolls on table
-                    rollOnTable ref.instructions table
-                        |> Random.map List.singleton
+                    rollOnTable table ref.instructions
                         |> Random.map
                             (\res ->
                                 RolledTable
                                     { path = ref.path
                                     , instructions = ref.instructions
                                     , result = res
-                                    , title = table.title
+                                    , title = ref.instructions.title |> withDefault table.title
                                     }
                             )
 
@@ -74,19 +164,19 @@ rollOnRef registry r =
                                             { bundle = res
                                             , instructions = ref.instructions
                                             , path = ref.path
-                                            , title = ref.title
+                                            , title = ref.instructions.title |> otherwiseMaybe ref.title
                                             }
                                     )
 
                         _ ->
-                            Debug.todo "unfindable table/bundle in registry"
+                            Debug.todo ("unfindable table/bundle in registry: " ++ pathString ref.path)
 
         BundleRef ref ->
             rollOnBundle registry (Debug.log "bundle" ref.bundle)
                 |> Random.map (updateBundle ref)
 
-        _ ->
-            Debug.todo "handle rolling a rolled ref"
+        RolledTable ref ->
+            rollOnRef registry (Ref { path = ref.path, instructions = ref.instructions, title = Just ref.title })
 
 
 type alias ExprRoller =

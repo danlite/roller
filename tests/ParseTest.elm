@@ -1,9 +1,9 @@
 module ParseTest exposing (..)
 
-import Dice exposing (Expr(..), FormulaTerm(..))
+import Dice exposing (Expr(..), FormulaTerm(..), Range)
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, intRange, tuple)
-import Parse exposing (expression)
+import Parse exposing (ParsedRow, expression)
 import Parser
 import Random exposing (maxInt)
 import String exposing (fromInt)
@@ -17,6 +17,11 @@ import Test exposing (..)
 parseExpression : String -> Result (List Parser.DeadEnd) Expr
 parseExpression =
     Parser.run expression
+
+
+parseRow : String -> Result (List Parser.DeadEnd) ParsedRow
+parseRow =
+    Parser.run Parse.row
 
 
 
@@ -87,6 +92,13 @@ expectParsedExpressionResult expr input =
         (Ok expr)
 
 
+expectParsedRowResult : Parse.ParsedRow -> String -> Expectation
+expectParsedRowResult row input =
+    Expect.equal
+        (parseRow input)
+        (Ok row)
+
+
 suite : Test
 suite =
     describe "The Parse module"
@@ -137,5 +149,31 @@ suite =
                             (diceString count sides ++ "+" ++ fromInt num)
                     )
                 ]
+            ]
+        , describe "rows"
+            [ test "parses ranged row"
+                (\_ ->
+                    expectParsedRowResult
+                        (Parse.RangedRow (Range 1 2) "My text")
+                        "1-2|My text"
+                )
+            , test "parses single ranged row"
+                (\_ ->
+                    expectParsedRowResult
+                        (Parse.RangedRow (Range 1 1) "My text")
+                        "1|My text"
+                )
+            , test "parses simple row"
+                (\_ ->
+                    expectParsedRowResult
+                        (Parse.SimpleRow "My text")
+                        "My text"
+                )
+            , test "parses simple row that starts with a digit"
+                (\_ ->
+                    expectParsedRowResult
+                        (Parse.SimpleRow "1 of my text")
+                        "1 of my text"
+                )
             ]
         ]

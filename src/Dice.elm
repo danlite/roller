@@ -30,6 +30,11 @@ type alias Range =
     { min : Int, max : Int }
 
 
+rangeMembers : Range -> List Int
+rangeMembers range =
+    List.range range.min range.max
+
+
 rangeIncludes : Int -> Range -> Bool
 rangeIncludes val range =
     val >= range.min && val <= range.max

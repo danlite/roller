@@ -7,7 +7,7 @@ import Json.Decode
 import KeyPress exposing (keyDecoder)
 import Loader exposing (getDirectory)
 import V2.Model exposing (Model, Msg(..), TableDirectoryState(..), update)
-import V2.View exposing (view)
+import V2.UI exposing (ui)
 
 
 initialModel : Model
@@ -15,6 +15,7 @@ initialModel =
     { registry = TableDirectoryLoading
     , results = []
     , tableSearchInput = ""
+    , tableSearchFieldText = ""
     , tableSearchResults = []
     , inSearchField = False
     , searchResultOffset = 0
@@ -34,7 +35,7 @@ main =
     Browser.element
         { init = init
         , update = update
-        , view = view
+        , view = ui
         , subscriptions = subscriptions
         }
 

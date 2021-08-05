@@ -2,7 +2,7 @@ module V2.View exposing (..)
 
 import Dice exposing (Expr(..))
 import Dict
-import Html exposing (Attribute, Html, button, div, input, span, text)
+import Html exposing (Attribute, Html, button, div, hr, input, span, text)
 import Html.Attributes exposing (attribute, class, placeholder, style)
 import Html.Events exposing (onBlur, onClick, onFocus, onInput)
 import List.Extra
@@ -10,14 +10,14 @@ import Maybe exposing (withDefault)
 import Parser
 import String exposing (fromInt)
 import V2.Model exposing (Model, Msg(..), Roll(..), TableDirectoryState(..), maxResults, rollablePath, selectedRollable)
-import V2.Rollable exposing (EvaluatedRow, IndexPath, Rollable(..), RollableRef(..), TableRollResult(..))
+import V2.Rollable exposing (EvaluatedRow, IndexPath, Rollable(..), RollableRef(..), TableRollResult(..), pathString)
 
 
 refRollableTitle : RollableRef -> String
 refRollableTitle ref =
     case ref of
         Ref r ->
-            r.path
+            pathString r.path
 
         RolledTable r ->
             r.title
@@ -28,15 +28,16 @@ refRollableTitle ref =
 
 rollableRefPath : RollableRef -> String
 rollableRefPath r =
-    case r of
-        Ref ref ->
-            ref.path
+    pathString <|
+        case r of
+            Ref ref ->
+                ref.path
 
-        RolledTable ref ->
-            ref.path
+            RolledTable ref ->
+                ref.path
 
-        BundleRef ref ->
-            ref.path
+            BundleRef ref ->
+                ref.path
 
 
 rollButton : IndexPath -> String -> Html Msg
@@ -50,12 +51,12 @@ rollableRefView index ref =
         Ref info ->
             div
                 (class "ref" :: indexClass index)
-                [ text info.path, rollButton index ("Roll " ++ info.path) ]
+                [ text (pathString info.path), rollButton index ("Roll " ++ pathString info.path) ]
 
         RolledTable info ->
             div
                 (class "rolled-table" :: indexClass index)
-                ([ text info.path, rollButton index ("Reroll " ++ info.title) ]
+                ([ text (pathString info.path), rollButton index ("Reroll " ++ info.title) ]
                     ++ List.map (tableRollResultView index) info.result
                 )
 
@@ -164,15 +165,6 @@ resultsView results =
             rollableRefView
             results
         )
-
-
-view : Model -> Html Msg
-view model =
-    div []
-        [ tableSearch model
-        , button [ onClick (Roll SelectedTable) ] [ text (rollButtonText model) ]
-        , resultsView model.results
-        ]
 
 
 tableSearch : Model -> Html Msg

@@ -1,10 +1,16 @@
 - TESTS
-- roll table refs & bundles
+- code reorganization
+  - merge in V2
 - parse table inputs (e.g. name generators)
 - evaluate row text
   - placeholders
   - variables
+- reroll ref on multi-roll-result table
+  - simpler nested results state?
+- "pass-through" tables?
+  - e.g. for:
+    - Perilous Wilds: Creature -> Humanoid -> Humanoid -> [Humanoid -> Common] -> Common (collapse the [])
+    - selectable tables like XGTE life decisions Class+Background tables, or MCDM S&F Special Allies table
+  - how to model/display?
+    - collapse horizontally?
 - multi-dimensional tables
-- nested results state
-- nested results UI (i.e. table refs)
-- reroll result (cascading???)
