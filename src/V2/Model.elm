@@ -11,7 +11,7 @@ import Maybe exposing (withDefault)
 import Random
 import Search exposing (fuzzySearch)
 import Task
-import V2.Random exposing (rollOnRef)
+import V2.Random exposing (rerollSingleTableRow, rollOnRef)
 import V2.Rollable exposing (IndexPath, Registry, Rollable(..), RollableRef(..), refAtIndex, replaceAtIndex, simpleRef)
 import V2.Scroll exposing (jumpToBottom)
 
@@ -31,6 +31,7 @@ type alias Model =
 type Roll
     = SelectedTable
     | Reroll IndexPath
+    | RerollSingleRow IndexPath Int
 
 
 maxResults : Int
@@ -146,6 +147,14 @@ update msg model =
                     case ( refAtIndex index model.results, model.registry ) of
                         ( Just ref, TableDirectory registry ) ->
                             ( model, Random.generate (DidRoll index) (rollOnRef registry ref) )
+
+                        _ ->
+                            ( model, Debug.log "none found!" Cmd.none )
+
+                RerollSingleRow index rowIndex ->
+                    case ( refAtIndex index model.results, model.registry ) of
+                        ( Just ref, TableDirectory registry ) ->
+                            ( model, Random.generate (DidRoll index) (rerollSingleTableRow registry ref rowIndex) )
 
                         _ ->
                             ( model, Debug.log "none found!" Cmd.none )

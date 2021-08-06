@@ -2,6 +2,7 @@ module V2.Random exposing (..)
 
 import Dice exposing (Die, Expr(..), FormulaTerm(..), rangeMembers)
 import List exposing (sum)
+import List.Extra
 import Maybe exposing (withDefault)
 import Random exposing (Generator, andThen, map)
 import Random.Extra exposing (sequence)
@@ -11,10 +12,12 @@ import V2.Rollable
         , Registry
         , RollInstructions
         , RollableRef(..)
+        , RollableRefData
         , Row
         , TableRollResult(..)
         , TableSource
         , Variable(..)
+        , WithTableResult
         , findBundleSource
         , findTableSource
         , pathString
@@ -177,6 +180,44 @@ rollOnRef registry r =
 
         RolledTable ref ->
             rollOnRef registry (Ref { path = ref.path, instructions = ref.instructions, title = Just ref.title })
+
+
+onlyOneRollCount : RollInstructions -> RollInstructions
+onlyOneRollCount instructions =
+    { instructions | rollCount = Just (ConstValue 1) }
+
+
+updateRowResult : Int -> TableRollResult -> WithTableResult a -> WithTableResult a
+updateRowResult rowIndex newResult rolledTable =
+    { rolledTable | result = List.Extra.setAt rowIndex newResult rolledTable.result }
+
+
+rerollSingleTableRow : Registry -> RollableRef -> Int -> Generator RollableRef
+rerollSingleTableRow registry r rowIndex =
+    case r of
+        RolledTable ref ->
+            case findTableSource registry ref.path of
+                Just table ->
+                    let
+                        newRowRoll =
+                            -- TODO: modify instructions for "ignore" using existing table context
+                            rollOnTable table (onlyOneRollCount ref.instructions)
+                    in
+                    newRowRoll
+                        |> Random.map
+                            (List.head
+                                >> Maybe.map
+                                    (\rollResult ->
+                                        updateRowResult rowIndex rollResult ref |> RolledTable
+                                    )
+                                >> Maybe.withDefault r
+                            )
+
+                _ ->
+                    Random.constant r
+
+        _ ->
+            Random.constant r
 
 
 type alias ExprRoller =

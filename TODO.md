@@ -5,8 +5,7 @@
 - evaluate row text
   - placeholders
   - variables
-- reroll ref on multi-roll-result table
-  - simpler nested results state?
+- simpler nested results state?
 - "pass-through" tables?
   - e.g. for:
     - Perilous Wilds: Creature -> Humanoid -> Humanoid -> [Humanoid -> Common] -> Common (collapse the [])

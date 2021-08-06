@@ -79,6 +79,11 @@ rollButton ip =
     Input.button [ alignRight ] { onPress = Just (Roll (Reroll ip)), label = "roll " ++ (List.map fromInt ip |> String.join ".") |> text }
 
 
+rollRowButton : IndexPath -> Int -> Element Msg
+rollRowButton ip ri =
+    Input.button [ alignRight ] { onPress = Just (Roll (RerollSingleRow ip ri)), label = "roll " ++ ((List.map fromInt ip |> String.join ".") ++ ":" ++ fromInt ri) |> text }
+
+
 bundle : IndexPath -> BundleRef -> Element Msg
 bundle ip b =
     fullWidthColumn (indexPath ip ++ [ spacing -1 ])
@@ -90,7 +95,7 @@ bundle ip b =
 table : IndexPath -> RolledTable -> Element Msg
 table ip t =
     fullWidthColumn (indexPath ip ++ [ spacing -1 ]) <|
-        tableRollResultsWithTitle
+        tableRollResults
             ip
             (title t.title (rollButton ip))
             t.result
@@ -168,19 +173,8 @@ takeAfter index list =
             |> List.reverse
 
 
-tableRollResultsWithTitle : IndexPath -> Element Msg -> List TableRollResult -> List (Element Msg)
-tableRollResultsWithTitle ip titleEl res =
-    let
-        ( firstGroup, firstRefs, secondGroup ) =
-            splitTableRollResults res
-    in
-    (fullWidthColumn bordered <| titleEl :: List.map tableRollResult firstGroup)
-        :: (mapChildIndexes ip ref firstRefs |> children)
-        :: tableRollResultsWithNoTitle (List.length firstRefs) ip secondGroup
-
-
-tableRollResultsWithNoTitle : Int -> IndexPath -> List TableRollResult -> List (Element Msg)
-tableRollResultsWithNoTitle ipOffset ip res =
+tableRollResultsHelp : Int -> Int -> IndexPath -> Element Msg -> List TableRollResult -> List (Element Msg)
+tableRollResultsHelp riOffset ipOffset ip titleEl res =
     let
         ( firstGroup, firstRefs, secondGroup ) =
             splitTableRollResults res
@@ -191,18 +185,24 @@ tableRollResultsWithNoTitle ipOffset ip res =
 
         _ ->
             (fullWidthColumn bordered <|
-                List.map tableRollResult firstGroup
+                titleEl
+                    :: List.indexedMap (\ri r -> tableRollResult ip (ri + riOffset) r) firstGroup
             )
                 :: (mapChildIndexesWithOffset ipOffset ip ref firstRefs |> children)
-                :: tableRollResultsWithNoTitle (List.length firstRefs) ip secondGroup
+                :: tableRollResultsHelp riOffset (List.length firstRefs) ip none secondGroup
 
 
-tableRollResult : TableRollResult -> Element Msg
-tableRollResult res =
+tableRollResults : IndexPath -> Element Msg -> List TableRollResult -> List (Element Msg)
+tableRollResults =
+    tableRollResultsHelp 0 0
+
+
+tableRollResult : IndexPath -> Int -> TableRollResult -> Element Msg
+tableRollResult ip ri res =
     let
         rollRow : Int -> List (Element Msg) -> Element Msg
         rollRow rt els =
-            row [ padding 10 ] (rollTotal rt :: els)
+            row [ padding 10, width fill ] (rollTotal rt :: els)
     in
     case res of
         RolledRow r ->
@@ -214,6 +214,7 @@ tableRollResult res =
                         |> text
                         |> List.singleton
                         |> paragraph []
+                    , rollRowButton ip ri
                     ]
                 ]
 
