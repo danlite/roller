@@ -1,4 +1,4 @@
-module V2.UI exposing (..)
+module UI exposing (..)
 
 import Element exposing (..)
 import Element.Border as Border
@@ -7,9 +7,8 @@ import Element.Input as Input
 import Html exposing (Html)
 import Html.Attributes
 import List.Extra
-import String exposing (fromInt)
-import V2.Model exposing (Model, Msg(..), Roll(..))
-import V2.Rollable
+import Model exposing (Model, Msg(..), Roll(..))
+import Rollable
     exposing
         ( IndexPath
         , RollableRef(..)
@@ -20,7 +19,9 @@ import V2.Rollable
         , WithTableResult
         , pathString
         )
-import V2.UI.Search exposing (search)
+import String exposing (fromInt)
+import UI.Search exposing (search)
+import Utils exposing (..)
 
 
 results : List (Element Msg) -> Element Msg
@@ -117,11 +118,6 @@ rolledText t =
             " "
 
 
-parentheses : String -> String
-parentheses inner =
-    "(" ++ inner ++ ")"
-
-
 rollTotal : Int -> Element Msg
 rollTotal t =
     el [ Font.center, width (px 100), alignTop ] <| text <| parentheses <| fromInt t
@@ -137,6 +133,18 @@ hasChildren res =
             False
 
 
+{-| Split a list of TableRollResults to a 3-tuple of:
+
+    (
+        results up to and including the first result with any refs;
+        the refs of that result, if present;
+        the rest of the results
+    )
+
+This enables the visual grouping of rows, separated by
+any interspersed refs.
+
+-}
 splitTableRollResults : List TableRollResult -> ( List TableRollResult, List RollableRef, List TableRollResult )
 splitTableRollResults res =
     let
@@ -157,20 +165,6 @@ splitTableRollResults res =
 
         _ ->
             ( res, [], [] )
-
-
-takeAfter : Int -> List a -> List a
-takeAfter index list =
-    if index < 0 then
-        list
-
-    else if index >= List.length list then
-        []
-
-    else
-        List.reverse list
-            |> List.take (List.length list - index - 1)
-            |> List.reverse
 
 
 tableRollResultsHelp : Int -> Int -> IndexPath -> Element Msg -> List TableRollResult -> List (Element Msg)

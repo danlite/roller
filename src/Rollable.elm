@@ -1,4 +1,4 @@
-module V2.Rollable exposing (..)
+module Rollable exposing (..)
 
 import Dice exposing (Expr, FormulaTerm(..), Range, rangeIncludes)
 import Dict exposing (Dict)

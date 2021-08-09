@@ -1,7 +1,7 @@
-module V2.Mocks exposing (..)
+module Mocks exposing (..)
 
-import Dice exposing (Range)
-import V2.Rollable exposing (Bundle, Path(..), RollInstructions, RollableRef(..), RollableText(..), Row, TableRollResult(..))
+import Dice exposing (Range, makeSingleRange)
+import Rollable exposing (Bundle, Path(..), RollInstructions, RollableRef(..), RollableText(..), Row, TableRollResult(..))
 
 
 mockRow : Row
@@ -14,6 +14,7 @@ mockRolledRow refs =
     RolledRow
         { result = { refs = refs, text = [ PlainText "PlainText" ] }
         , rollTotal = 3
+        , range = makeSingleRange 3
         }
 
 

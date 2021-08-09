@@ -1,4 +1,4 @@
-module V2.Scroll exposing (..)
+module Scroll exposing (..)
 
 import Browser.Dom as Dom
 import Task

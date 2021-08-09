@@ -1,4 +1,4 @@
-module V2.Model exposing (..)
+module Model exposing (..)
 
 import Debounce exposing (Debounce)
 import Dict
@@ -9,11 +9,11 @@ import List.Extra
 import Loader exposing (RollableLoadResult, loadTable)
 import Maybe exposing (withDefault)
 import Random
+import Roll exposing (rerollSingleTableRow, rollOnRef)
+import Rollable exposing (IndexPath, Registry, Rollable(..), RollableRef(..), refAtIndex, replaceAtIndex, simpleRef)
+import Scroll exposing (jumpToBottom)
 import Search exposing (fuzzySearch)
 import Task
-import V2.Random exposing (rerollSingleTableRow, rollOnRef)
-import V2.Rollable exposing (IndexPath, Registry, Rollable(..), RollableRef(..), refAtIndex, replaceAtIndex, simpleRef)
-import V2.Scroll exposing (jumpToBottom)
 
 
 type alias Model =

@@ -1,4 +1,4 @@
-module V2.Main exposing (..)
+module Main exposing (..)
 
 import Browser
 import Browser.Events exposing (onKeyDown)
@@ -6,8 +6,8 @@ import Debounce
 import Json.Decode
 import KeyPress exposing (keyDecoder)
 import Loader exposing (getDirectory)
-import V2.Model exposing (Model, Msg(..), TableDirectoryState(..), update)
-import V2.UI exposing (ui)
+import Model exposing (Model, Msg(..), TableDirectoryState(..), update)
+import UI exposing (ui)
 
 
 initialModel : Model

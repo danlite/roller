@@ -3,9 +3,9 @@ module Loader exposing (..)
 import Decode exposing (decoder)
 import Http
 import Json.Decode as J
+import Rollable exposing (Rollable)
 import String exposing (dropLeft, startsWith)
 import Url.Builder exposing (crossOrigin)
-import V2.Rollable exposing (Rollable)
 import Yaml.Decode
 
 

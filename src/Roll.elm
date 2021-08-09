@@ -1,4 +1,4 @@
-module V2.Random exposing (..)
+module Roll exposing (..)
 
 import Dice exposing (Die, Expr(..), FormulaTerm(..), rangeMembers)
 import List exposing (sum)
@@ -6,13 +6,12 @@ import List.Extra
 import Maybe exposing (withDefault)
 import Random exposing (Generator, andThen, map)
 import Random.Extra exposing (sequence)
-import V2.Rollable
+import Rollable
     exposing
         ( Bundle
         , Registry
         , RollInstructions
         , RollableRef(..)
-        , RollableRefData
         , Row
         , TableRollResult(..)
         , TableSource
@@ -32,7 +31,7 @@ pickRowFromTable rows =
 
 
 evaluateVariable : a -> Variable -> Int
-evaluateVariable context variable =
+evaluateVariable _ variable =
     case variable of
         ConstValue v ->
             v

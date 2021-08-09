@@ -10,7 +10,7 @@ import Dice
         )
 import Parse exposing (ParsedRow(..), row)
 import Parser
-import V2.Rollable exposing (RollInstructions, Rollable(..), RollableRef(..), RollableRefData, Row, UnresolvedRollableRefData, Variable(..), resolvePathInContext)
+import Rollable exposing (RollInstructions, Rollable(..), RollableRef(..), RollableRefData, Row, UnresolvedRollableRefData, Variable(..), resolvePathInContext)
 import Yaml.Decode exposing (Decoder, andMap, andThen, bool, fail, field, list, map, map2, map3, maybe, oneOf, string, succeed)
 
 

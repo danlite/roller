@@ -1,5 +1,6 @@
-module V2.UI.Search exposing (..)
+module UI.Search exposing (..)
 
+import Dice exposing (Expr(..))
 import Dict
 import Element exposing (..)
 import Element.Background as Background
@@ -7,9 +8,9 @@ import Element.Events exposing (onFocus)
 import Element.Input as Input
 import Html.Attributes
 import Html.Events exposing (onBlur)
+import Model exposing (Model, Msg(..), Roll(..), TableDirectoryState(..), maxResults, rollablePath, selectedRollable)
+import Rollable exposing (Rollable(..))
 import String exposing (fromInt)
-import V2.Model exposing (Model, Msg(..), Roll(..), TableDirectoryState(..), maxResults, rollablePath, selectedRollable)
-import V2.View exposing (rollButtonText)
 
 
 searchField : Model -> Element Msg
@@ -83,3 +84,42 @@ search model =
             ]
         , searchResults model
         ]
+
+
+expressionString : Result x Expr -> String
+expressionString t =
+    case t of
+        Err x ->
+            Debug.toString x
+
+        Ok expr ->
+            case expr of
+                Term term ->
+                    Dice.formulaTermString term
+
+                Add e1 e2 ->
+                    String.join "+" [ expressionString (Ok e1), expressionString (Ok e2) ]
+
+                Sub e1 e2 ->
+                    String.join "-" [ expressionString (Ok e1), expressionString (Ok e2) ]
+
+
+rollButtonTextForRollable : Rollable -> String
+rollButtonTextForRollable rollable =
+    case rollable of
+        RollableTable table ->
+            "Roll " ++ expressionString (Ok table.dice)
+
+        RollableBundle _ ->
+            "Roll bundle"
+
+        _ ->
+            ""
+
+
+rollButtonText : Model -> String
+rollButtonText model =
+    Maybe.withDefault "Select a table first"
+        (selectedRollable model
+            |> Maybe.map rollButtonTextForRollable
+        )

@@ -2,7 +2,7 @@ module Registry exposing (FindErr(..), FindResult, Registry, findTable, map)
 
 import Dict exposing (Dict)
 import Result exposing (andThen, fromMaybe)
-import V2.Rollable exposing (Rollable)
+import Rollable exposing (Rollable)
 
 
 type alias Registry =
