@@ -1,8 +1,8 @@
 module RollableTest exposing (..)
 
 import Expect
+import Rollable exposing (Path(..), joinPaths, pathComponentRegex, refParentDir, replaceRegex, resolveDoubleDot, resolvePathInContext)
 import Test exposing (..)
-import V2.Rollable exposing (Path(..), joinPaths, pathComponentRegex, refParentDir, replaceRegex, resolveDoubleDot, resolvePathInContext)
 
 
 p : String -> Path

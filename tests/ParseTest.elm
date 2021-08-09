@@ -176,4 +176,8 @@ suite =
                         "1 of my text"
                 )
             ]
+        , describe "rollable text"
+            [ todo "parses rollable value (like [[@foo:2d6+1]])"
+            , todo "parses percents"
+            ]
         ]
