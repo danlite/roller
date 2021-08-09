@@ -1,10 +1,8 @@
 - TESTS
-- code reorganization
-  - merge in V2
-- parse table inputs (e.g. name generators)
 - evaluate row text
   - placeholders
   - variables
+- parse table inputs (e.g. name generators)
 - simpler nested results state?
 - "pass-through" tables?
   - e.g. for:
@@ -12,4 +10,4 @@
     - selectable tables like XGTE life decisions Class+Background tables, or MCDM S&F Special Allies table
   - how to model/display?
     - collapse horizontally?
-- multi-dimensional tables
+- multi-dimensional tables? (SKT)
