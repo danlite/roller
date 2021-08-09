@@ -1,5 +1,6 @@
 module UI exposing (..)
 
+import Dice exposing (RollableText(..), RollableValue(..))
 import Element exposing (..)
 import Element.Border as Border
 import Element.Font as Font
@@ -13,14 +14,13 @@ import Rollable
         ( IndexPath
         , RollableRef(..)
         , RollableRefData
-        , RollableText(..)
         , TableRollResult(..)
         , WithBundle
         , WithTableResult
         , pathString
         )
 import String exposing (fromInt)
-import UI.Search exposing (search)
+import UI.Search exposing (expressionString, search)
 import Utils exposing (..)
 
 
@@ -112,7 +112,16 @@ rolledText t =
                         pt
 
                     RollableText rv ->
-                        Debug.todo "rollablevalue"
+                        parentheses
+                            (expressionString
+                                (case rv of
+                                    RollableValue v ->
+                                        v.expression
+
+                                    RolledValue v ->
+                                        v.expression
+                                )
+                            )
             )
         |> String.join
             " "

@@ -86,29 +86,24 @@ search model =
         ]
 
 
-expressionString : Result x Expr -> String
-expressionString t =
-    case t of
-        Err x ->
-            Debug.toString x
+expressionString : Expr -> String
+expressionString expr =
+    case expr of
+        Term term ->
+            Dice.formulaTermString term
 
-        Ok expr ->
-            case expr of
-                Term term ->
-                    Dice.formulaTermString term
+        Add e1 e2 ->
+            String.join "+" [ expressionString e1, expressionString e2 ]
 
-                Add e1 e2 ->
-                    String.join "+" [ expressionString (Ok e1), expressionString (Ok e2) ]
-
-                Sub e1 e2 ->
-                    String.join "-" [ expressionString (Ok e1), expressionString (Ok e2) ]
+        Sub e1 e2 ->
+            String.join "-" [ expressionString e1, expressionString e2 ]
 
 
 rollButtonTextForRollable : Rollable -> String
 rollButtonTextForRollable rollable =
     case rollable of
         RollableTable table ->
-            "Roll " ++ expressionString (Ok table.dice)
+            "Roll " ++ expressionString table.dice
 
         RollableBundle _ ->
             "Roll bundle"

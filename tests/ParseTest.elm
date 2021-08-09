@@ -1,6 +1,6 @@
 module ParseTest exposing (..)
 
-import Dice exposing (Expr(..), FormulaTerm(..), Range)
+import Dice exposing (Expr(..), FormulaTerm(..), Range, RollableText(..), RollableValue(..))
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, intRange, tuple)
 import Parse exposing (ParsedRow, expression)
@@ -22,6 +22,11 @@ parseExpression =
 parseRow : String -> Result (List Parser.DeadEnd) ParsedRow
 parseRow =
     Parser.run Parse.row
+
+
+parseRowText : String -> Result (List Parser.DeadEnd) (List RollableText)
+parseRowText =
+    Parser.run Parse.rowText
 
 
 
@@ -66,6 +71,13 @@ diceExpr count sides =
     Term (MultiDie { count = count, sides = sides })
 
 
+diceExprWithConstant : Int -> Int -> Int -> Expr
+diceExprWithConstant count sides const =
+    Add
+        (diceExpr count sides)
+        (constantTerm const)
+
+
 constantTerm : Int -> Expr
 constantTerm n =
     Term (Constant n)
@@ -97,6 +109,13 @@ expectParsedRowResult row input =
     Expect.equal
         (parseRow input)
         (Ok row)
+
+
+expectParsedRowTextResult : List RollableText -> String -> Expectation
+expectParsedRowTextResult rowText input =
+    Expect.equal
+        (Ok rowText)
+        (parseRowText input)
 
 
 suite : Test
@@ -176,8 +195,34 @@ suite =
                         "1 of my text"
                 )
             ]
-        , describe "rollable text"
-            [ todo "parses rollable value (like [[@foo:2d6+1]])"
+        , describe "row text"
+            [ test "parses rollable value (like [[@foo:2d6+1]])"
+                (\_ ->
+                    expectParsedRowTextResult
+                        [ RollableText (RollableValue { var = "foo", expression = diceExprWithConstant 2 6 1 }) ]
+                        "[[@foo:2d6+1]]"
+                )
+            , test "parses rollable value (like [[@foo:2d6]])"
+                (\_ ->
+                    expectParsedRowTextResult
+                        [ RollableText (RollableValue { var = "foo", expression = diceExpr 2 6 }) ]
+                        "[[@foo:2d6]]"
+                )
+            , test
+                "parses plain text"
+                (\_ ->
+                    expectParsedRowTextResult [ PlainText "abc def" ] "abc def"
+                )
+            , test
+                "parses plain and rollable text"
+                (\_ ->
+                    expectParsedRowTextResult
+                        [ PlainText "abc "
+                        , RollableText (RollableValue { var = "foo", expression = diceExpr 2 6 })
+                        , PlainText " def"
+                        ]
+                        "abc [[@foo:2d6]] def"
+                )
             , todo "parses percents"
             ]
         ]

@@ -16,6 +16,22 @@ type FormulaTerm
         }
 
 
+type Expr
+    = Term FormulaTerm
+    | Add Expr Expr
+    | Sub Expr Expr
+
+
+type RollableValue
+    = RollableValue { var : String, expression : Expr }
+    | RolledValue { var : String, expression : Expr, value : Int }
+
+
+type RollableText
+    = PlainText String
+    | RollableText RollableValue
+
+
 formulaTermString : FormulaTerm -> String
 formulaTermString term =
     case term of
@@ -61,42 +77,3 @@ rangeString range =
 
     else
         String.join "–" (map fromInt [ range.min, range.max ])
-
-
-
--- rollTableRef : RollContext -> ResolvedTableRef -> Result DiceError TableRefRoller
--- rollTableRef context tableRef =
---     rollTableRefTables
---         context
---         tableRef
---         |> Result.andThen
---             (Random.map
---                 (\rolledTables -> RolledTableRef tableRef rolledTables)
---                 >> Ok
---             )
--- rollTableRefTables : RollContext -> ResolvedTableRef -> Result DiceError (Random.Generator (List RolledTable))
--- rollTableRefTables context tableRef =
---     rollCount tableRef.ref.rollCount context
---         |> Result.andThen
---             (\count ->
---                 Ok
---                     (Random.list
---                         count
---                         (rollTable tableRef.table tableRef.table.dice)
---                     )
---             )
--- rollBundleTables : RollContext -> ResolvedBundle -> Result DiceError (Random.Generator (List RolledTableRef))
--- rollBundleTables context bundle =
---     Result.Extra.combine
---         (List.map
---             (rollTableRef context)
---             bundle.tables
---         )
---         |> Result.andThen
---             (Random.Extra.combine >> Ok)
-
-
-type Expr
-    = Term FormulaTerm
-    | Add Expr Expr
-    | Sub Expr Expr

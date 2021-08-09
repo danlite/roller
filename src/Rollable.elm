@@ -1,9 +1,11 @@
 module Rollable exposing (..)
 
-import Dice exposing (Expr, FormulaTerm(..), Range, rangeIncludes)
+import Dice exposing (Expr, FormulaTerm(..), Range, RollableText(..), RollableValue(..), rangeIncludes)
 import Dict exposing (Dict)
 import List.Extra exposing (getAt, setAt, updateAt)
 import Maybe exposing (withDefault)
+import Parse
+import Parser
 import Regex
 import Result exposing (fromMaybe)
 
@@ -21,16 +23,6 @@ type Path
 
 type alias IndexPath =
     List Int
-
-
-type RollableValue
-    = RollableValue { var : String, expression : Expr }
-    | RolledValue { var : String, expression : Expr, value : Int }
-
-
-type RollableText
-    = PlainText String
-    | RollableText RollableValue
 
 
 type alias Row =
@@ -288,7 +280,16 @@ rollResultForRollOnTable : List Row -> Int -> TableRollResult
 rollResultForRollOnTable rows rollTotal =
     case List.Extra.find (\r -> rangeIncludes rollTotal r.range) rows of
         Just row ->
-            RolledRow { result = EvaluatedRow [ PlainText row.text ] row.refs, rollTotal = rollTotal, range = row.range }
+            RolledRow
+                { result =
+                    EvaluatedRow
+                        (Result.withDefault [ PlainText row.text ]
+                            (Parser.run Parse.rowText row.text)
+                        )
+                        row.refs
+                , rollTotal = rollTotal
+                , range = row.range
+                }
 
         _ ->
             MissingRowError { rollTotal = rollTotal }

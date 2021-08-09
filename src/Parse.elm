@@ -1,8 +1,9 @@
 module Parse exposing (..)
 
 import Char exposing (isDigit)
-import Dice exposing (Expr(..), FormulaTerm(..), Range, makeRange, makeSingleRange)
-import Parser exposing ((|.), (|=), Parser, andThen, backtrackable, getChompedString, int, lazy, map, oneOf, spaces, succeed, symbol)
+import Dice exposing (Expr(..), FormulaTerm(..), Range, RollableText(..), RollableValue(..), makeRange, makeSingleRange)
+import Parser exposing (..)
+import Set
 import String exposing (toInt)
 
 
@@ -201,4 +202,55 @@ row =
         [ backtrackable rangedRowParser
         , succeed SimpleRow
             |= (getChompedString <| succeed identity |= Parser.chompUntilEndOr "\n")
+        ]
+
+
+rollableVar : Parser String
+rollableVar =
+    variable
+        { start = Char.isAlpha
+        , inner = Char.isAlphaNum
+        , reserved = Set.empty
+        }
+
+
+rollableValue : Parser RollableText
+rollableValue =
+    succeed (\var ex -> RollableValue { var = var, expression = ex })
+        |. symbol "[[@"
+        |= rollableVar
+        |. symbol ":"
+        |= expression
+        |. symbol "]]"
+        |> map RollableText
+
+
+plainText : Parser RollableText
+plainText =
+    succeed PlainText
+        |= (getChompedString <|
+                succeed ()
+                    |. chompUntilEndOr "[["
+           )
+
+
+rollableText : Parser RollableText
+rollableText =
+    oneOf
+        [ rollableValue
+        , plainText
+        ]
+
+
+rowText : Parser (List RollableText)
+rowText =
+    loop [] rowTextHelp
+
+
+rowTextHelp : List RollableText -> Parser (Step (List RollableText) (List RollableText))
+rowTextHelp revParts =
+    oneOf
+        [ end |> map (\_ -> Done (List.reverse revParts))
+        , succeed (\part -> Loop (part :: revParts))
+            |= rollableText
         ]
