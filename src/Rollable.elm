@@ -1,6 +1,6 @@
 module Rollable exposing (..)
 
-import Dice exposing (Expr, FormulaTerm(..), Range, RollableText(..), RollableValue(..), rangeIncludes)
+import Dice exposing (Expr, FormulaTerm(..), Range, RowTextComponent(..), rangeIncludes)
 import Dict exposing (Dict)
 import List.Extra exposing (getAt, setAt, updateAt)
 import Maybe exposing (withDefault)
@@ -30,7 +30,7 @@ type alias Row =
 
 
 type alias EvaluatedRow =
-    { text : List RollableText, refs : List RollableRef }
+    { text : List RowTextComponent, refs : List RollableRef }
 
 
 type alias RollInstructions =
@@ -295,6 +295,11 @@ rollResultForRollOnTable rows rollTotal =
             MissingRowError { rollTotal = rollTotal }
 
 
+tableRollResultsRefs : List TableRollResult -> List RollableRef
+tableRollResultsRefs results =
+    List.concatMap tableRollResultRefs results
+
+
 tableRollResultRefs : TableRollResult -> List RollableRef
 tableRollResultRefs result =
     case result of
@@ -303,38 +308,6 @@ tableRollResultRefs result =
 
         _ ->
             []
-
-
-refAtIndex : IndexPath -> List RollableRef -> Maybe RollableRef
-refAtIndex index model =
-    case index of
-        [] ->
-            Nothing
-
-        [ i ] ->
-            List.Extra.getAt i model
-
-        i :: rest ->
-            case List.Extra.getAt i model of
-                Just (BundleRef bundleRef) ->
-                    refAtIndex rest bundleRef.bundle.tables
-
-                Just (RolledTable info) ->
-                    case info.result of
-                        [ rollResult ] ->
-                            case rollResult of
-                                RolledRow rolledRow ->
-                                    refAtIndex rest rolledRow.result.refs
-
-                                _ ->
-                                    Nothing
-
-                        _ ->
-                            -- TODO: refer to mapAccuml in replaceAtIndexOfRolledTable
-                            Debug.todo "lookup refAtIndex for a multiple-rolled-row table"
-
-                _ ->
-                    Nothing
 
 
 replaceAtIndex : IndexPath -> RollableRef -> List RollableRef -> List RollableRef
@@ -352,86 +325,72 @@ replaceAtIndex index new list =
 
 replaceNestedRef : IndexPath -> RollableRef -> RollableRef -> RollableRef
 replaceNestedRef index new old =
-    case old of
-        BundleRef info ->
-            BundleRef
-                { info
-                    | bundle =
-                        { path = info.bundle.path
-                        , title = info.bundle.title
-                        , tables = replaceAtIndex index new info.bundle.tables
-                        }
-                }
-
-        RolledTable info ->
-            RolledTable
-                { info
-                    | result =
-                        replaceAtIndexOfRolledTable
-                            index
-                            new
-                            info.result
-                }
+    case index of
+        [] ->
+            new
 
         _ ->
-            old
+            case old of
+                BundleRef info ->
+                    BundleRef
+                        { info
+                            | bundle =
+                                { path = info.bundle.path
+                                , title = info.bundle.title
+                                , tables = replaceAtIndex index new info.bundle.tables
+                                }
+                        }
+
+                RolledTable info ->
+                    RolledTable
+                        { info
+                            | result =
+                                replaceAtIndexOfRolledTable
+                                    index
+                                    new
+                                    info.result
+                        }
+
+                _ ->
+                    old
 
 
 replaceAtIndexOfRolledTable : IndexPath -> RollableRef -> List TableRollResult -> List TableRollResult
 replaceAtIndexOfRolledTable index new results =
+    let
+        help : Int -> (RollableRef -> RollableRef) -> List TableRollResult
+        help indexHead replacer =
+            List.Extra.mapAccuml
+                (\curIndex res ->
+                    case res of
+                        RolledRow rr ->
+                            let
+                                newIndex =
+                                    curIndex + List.length rr.result.refs
+                            in
+                            ( newIndex
+                            , RolledRow
+                                { rr
+                                    | result = replaceRefInRow indexHead curIndex replacer rr.result
+                                }
+                            )
+
+                        _ ->
+                            ( curIndex, res )
+                )
+                0
+                results
+                |> Tuple.second
+    in
     case index of
         [] ->
             results
 
         [ i ] ->
-            -- this gonna get messy
-            -- TODO: refactor shared logic!
-            List.Extra.mapAccuml
-                (\curIndex res ->
-                    case res of
-                        RolledRow rr ->
-                            let
-                                newIndex =
-                                    curIndex + List.length rr.result.refs
-                            in
-                            ( newIndex
-                            , RolledRow
-                                { rr
-                                    | result = replaceRefInRow i curIndex (\_ -> new) rr.result
-                                }
-                            )
-
-                        _ ->
-                            ( curIndex, res )
-                )
-                0
-                results
-                |> Tuple.second
+            help i (always new)
 
         i :: rest ->
-            -- this gonna get messy
-            -- TODO: refactor shared logic!
-            List.Extra.mapAccuml
-                (\curIndex res ->
-                    case res of
-                        RolledRow rr ->
-                            let
-                                newIndex =
-                                    curIndex + List.length rr.result.refs
-                            in
-                            ( newIndex
-                            , RolledRow
-                                { rr
-                                    | result = replaceRefInRow i curIndex (replaceNestedRef rest new) rr.result
-                                }
-                            )
-
-                        _ ->
-                            ( curIndex, res )
-                )
-                0
-                results
-                |> Tuple.second
+            help i (replaceNestedRef rest new)
 
 
 replaceRefInRow : Int -> Int -> (RollableRef -> RollableRef) -> EvaluatedRow -> EvaluatedRow

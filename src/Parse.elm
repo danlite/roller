@@ -1,7 +1,7 @@
 module Parse exposing (..)
 
 import Char exposing (isDigit)
-import Dice exposing (Expr(..), FormulaTerm(..), Range, RollableText(..), RollableValue(..), makeRange, makeSingleRange)
+import Dice exposing (Expr(..), FormulaTerm(..), Range, RollableValue, RolledValue(..), RowTextComponent(..), makeRange, makeSingleRange)
 import Parser exposing (..)
 import Set
 import String exposing (toInt)
@@ -214,9 +214,9 @@ rollableVar =
         }
 
 
-rollableValue : Parser RollableText
+rollableValue : Parser RowTextComponent
 rollableValue =
-    succeed (\var ex -> RollableValue { var = var, expression = ex })
+    succeed (\var ex -> { var = var, expression = ex, value = UnrolledValue })
         |. symbol "[[@"
         |= rollableVar
         |. symbol ":"
@@ -225,7 +225,7 @@ rollableValue =
         |> map RollableText
 
 
-plainText : Parser RollableText
+plainText : Parser RowTextComponent
 plainText =
     succeed PlainText
         |= (getChompedString <|
@@ -234,7 +234,7 @@ plainText =
            )
 
 
-rollableText : Parser RollableText
+rollableText : Parser RowTextComponent
 rollableText =
     oneOf
         [ rollableValue
@@ -242,12 +242,12 @@ rollableText =
         ]
 
 
-rowText : Parser (List RollableText)
+rowText : Parser (List RowTextComponent)
 rowText =
     loop [] rowTextHelp
 
 
-rowTextHelp : List RollableText -> Parser (Step (List RollableText) (List RollableText))
+rowTextHelp : List RowTextComponent -> Parser (Step (List RowTextComponent) (List RowTextComponent))
 rowTextHelp revParts =
     oneOf
         [ end |> map (\_ -> Done (List.reverse revParts))

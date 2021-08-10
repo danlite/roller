@@ -1,8 +1,6 @@
 - TESTS
-- evaluate row text
-  - placeholders
-  - variables
 - parse table inputs (e.g. name generators)
+  - row text replacement
 - simpler nested results state?
 - "pass-through" tables?
   - e.g. for:

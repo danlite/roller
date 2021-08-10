@@ -1,7 +1,7 @@
 module Mocks exposing (..)
 
-import Dice exposing (Range, makeSingleRange)
-import Rollable exposing (Bundle, Path(..), RollInstructions, RollableRef(..), RollableText(..), Row, TableRollResult(..))
+import Dice exposing (Range, RowTextComponent(..), makeSingleRange)
+import Rollable exposing (Bundle, Path(..), RollInstructions, RollableRef(..), Row, TableRollResult(..))
 
 
 mockRow : Row

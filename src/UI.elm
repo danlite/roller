@@ -1,6 +1,6 @@
 module UI exposing (..)
 
-import Dice exposing (RollableText(..), RollableValue(..))
+import Dice exposing (RolledValue(..), RowTextComponent(..))
 import Element exposing (..)
 import Element.Border as Border
 import Element.Font as Font
@@ -102,29 +102,28 @@ table ip t =
             t.result
 
 
-rolledText : List RollableText -> String
-rolledText t =
-    t
-        |> List.map
-            (\rt ->
-                case rt of
-                    PlainText pt ->
-                        pt
+rolledText : List RowTextComponent -> List (Element Msg)
+rolledText =
+    List.map
+        (\rt ->
+            case rt of
+                PlainText pt ->
+                    text pt
 
-                    RollableText rv ->
-                        parentheses
-                            (expressionString
-                                (case rv of
-                                    RollableValue v ->
-                                        v.expression
+                RollableText rv ->
+                    parentheses
+                        (case rv.value of
+                            ErrorValue ->
+                                expressionString rv.expression
 
-                                    RolledValue v ->
-                                        v.expression
-                                )
-                            )
-            )
-        |> String.join
-            " "
+                            ValueResult v ->
+                                fromInt v
+
+                            UnrolledValue ->
+                                expressionString rv.expression
+                        )
+                        |> (\label -> Input.button [ Html.Attributes.title (expressionString rv.expression) |> htmlAttribute ] { onPress = Nothing, label = text label })
+        )
 
 
 rollTotal : Int -> Element Msg
@@ -192,7 +191,7 @@ tableRollResultsHelp riOffset ipOffset ip titleEl res =
                     :: List.indexedMap (\ri r -> tableRollResult ip (ri + riOffset) r) firstGroup
             )
                 :: (mapChildIndexesWithOffset ipOffset ip ref firstRefs |> children)
-                :: tableRollResultsHelp riOffset (List.length firstRefs) ip none secondGroup
+                :: tableRollResultsHelp (riOffset + List.length firstGroup) (List.length firstRefs) ip none secondGroup
 
 
 tableRollResults : IndexPath -> Element Msg -> List TableRollResult -> List (Element Msg)
@@ -214,8 +213,6 @@ tableRollResult ip ri res =
                     r.rollTotal
                     [ rolledText
                         r.result.text
-                        |> text
-                        |> List.singleton
                         |> paragraph []
                     , rollRowButton ip ri
                     ]

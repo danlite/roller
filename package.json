@@ -2,7 +2,9 @@
   "name": "roller-devdeps",
   "version": "0.1.0",
   "description": "Elm dev dependencies",
-  "scripts": {},
+  "scripts": {
+    "reactor": "elm reactor"
+  },
   "author": "",
   "license": "ISC",
   "dependencies": {

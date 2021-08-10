@@ -22,12 +22,17 @@ type Expr
     | Sub Expr Expr
 
 
-type RollableValue
-    = RollableValue { var : String, expression : Expr }
-    | RolledValue { var : String, expression : Expr, value : Int }
+type alias RollableValue =
+    { var : String, expression : Expr, value : RolledValue }
 
 
-type RollableText
+type RolledValue
+    = UnrolledValue
+    | ErrorValue
+    | ValueResult Int
+
+
+type RowTextComponent
     = PlainText String
     | RollableText RollableValue
 

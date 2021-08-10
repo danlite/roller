@@ -1,14 +1,17 @@
 module Roll exposing (..)
 
-import Dice exposing (Die, Expr(..), FormulaTerm(..), rangeMembers)
+import Dice exposing (Die, Expr(..), FormulaTerm(..), RollableValue, RolledValue(..), RowTextComponent(..), rangeMembers)
+import Dict
 import List exposing (sum)
 import List.Extra
 import Maybe exposing (withDefault)
-import Random exposing (Generator, andThen, map)
+import Random exposing (..)
 import Random.Extra exposing (sequence)
+import RollContext exposing (Context, addToContextFromRef, addToContextFromResults, logContext)
 import Rollable
     exposing
         ( Bundle
+        , EvaluatedRow
         , Registry
         , RollInstructions
         , RollableRef(..)
@@ -30,14 +33,19 @@ pickRowFromTable rows =
     Random.map (rollResultForRollOnTable rows) (Random.int 1 (List.length rows))
 
 
-evaluateVariable : a -> Variable -> Int
-evaluateVariable _ variable =
+evaluateVariable : Context -> Variable -> Int
+evaluateVariable context variable =
     case variable of
         ConstValue v ->
             v
 
         ContextKey k ->
-            Debug.todo ("evaluate context key: " ++ k)
+            case Dict.get k (logContext context) of
+                Just v ->
+                    v
+
+                _ ->
+                    Debug.todo ("missing context key: " ++ k)
 
 
 rollResultNumber : TableRollResult -> Int
@@ -60,14 +68,14 @@ siblingResultNumbers res =
             [ err.rollTotal ]
 
 
-rollOnTable : TableSource -> RollInstructions -> Generator (List TableRollResult)
-rollOnTable source instructions =
+rollOnTable : TableSource -> Context -> RollInstructions -> Generator (List TableRollResult)
+rollOnTable source context instructions =
     let
         rollCount =
-            evaluateVariable {} (withDefault (ConstValue 1) instructions.rollCount)
+            Debug.log "rollCount" (evaluateVariable context (withDefault (ConstValue 1) instructions.rollCount))
 
         doRoll =
-            rollSingleRowOnTable source
+            rollSingleRowOnTable context source
     in
     doRoll instructions
         |> andThen
@@ -90,20 +98,20 @@ rollOnTable source instructions =
                                         instructions.ignore
                             }
                     in
-                    Random.constant r
-                        :: (doRoll (Debug.log "modifiedInstructions" modifiedInstructions) |> List.singleton)
-                        |> sequence
+                    map2 (::)
+                        (Random.constant r)
+                        (rollOnTable source context (Debug.log "modifiedInstructions" modifiedInstructions))
             )
 
 
-rollSingleRowOnTable : TableSource -> RollInstructions -> Generator TableRollResult
-rollSingleRowOnTable source instructions =
+rollSingleRowOnTable : Context -> TableSource -> RollInstructions -> Generator TableRollResult
+rollSingleRowOnTable context source instructions =
     let
         dice =
             instructions.dice |> withDefault source.dice
 
         ignore =
-            instructions.ignore |> List.map (evaluateVariable {})
+            instructions.ignore |> List.map (evaluateVariable context)
     in
     rollExpr dice
         |> map evaluateExpr
@@ -115,16 +123,51 @@ rollSingleRowOnTable source instructions =
                         rollResultNumber r
                 in
                 if List.member (Debug.log "rollNumber" rollNumber) ignore then
-                    rollSingleRowOnTable source instructions
+                    rollSingleRowOnTable context source instructions
 
                 else
-                    Random.constant r
+                    evaluateRollResult r
             )
 
 
-rollOnBundle : Registry -> Bundle -> Generator Bundle
-rollOnBundle registry bundle =
-    List.map (rollOnRef registry) bundle.tables
+evaluateRollResult : TableRollResult -> Generator TableRollResult
+evaluateRollResult result =
+    case result of
+        RolledRow r ->
+            map (\e -> RolledRow { r | result = e }) (evaluateRowText r.result)
+
+        _ ->
+            constant result
+
+
+evaluateRowText : EvaluatedRow -> Generator EvaluatedRow
+evaluateRowText row =
+    List.map rollText row.text
+        |> sequence
+        |> map (\t -> { row | text = t })
+
+
+rollText : RowTextComponent -> Generator RowTextComponent
+rollText text =
+    case text of
+        PlainText _ ->
+            constant text
+
+        RollableText v ->
+            rollValue v
+                |> map RollableText
+
+
+rollValue : { a | var : String, expression : Expr } -> Generator RollableValue
+rollValue v =
+    rollExpr v.expression
+        |> map evaluateExpr
+        |> map (\rollTotal -> { var = v.var, expression = v.expression, value = ValueResult rollTotal })
+
+
+rollOnBundle : Registry -> Context -> Bundle -> Generator Bundle
+rollOnBundle registry context bundle =
+    List.map (rollOnRef registry context) bundle.tables
         |> Random.Extra.sequence
         |> Random.map (\refs -> { bundle | tables = refs })
 
@@ -139,13 +182,17 @@ otherwiseMaybe value fallback =
             value
 
 
-rollOnRef : Registry -> RollableRef -> Generator RollableRef
-rollOnRef registry r =
+rollOnRef : Registry -> Context -> RollableRef -> Generator RollableRef
+rollOnRef registry context r =
+    let
+        newContext =
+            addToContextFromRef r context
+    in
     case r of
         Ref ref ->
             case findTableSource registry ref.path of
                 Just table ->
-                    rollOnTable table ref.instructions
+                    rollOnTable table newContext ref.instructions
                         |> Random.map
                             (\res ->
                                 RolledTable
@@ -159,7 +206,7 @@ rollOnRef registry r =
                 _ ->
                     case findBundleSource registry ref.path of
                         Just bundle ->
-                            rollOnBundle registry bundle
+                            rollOnBundle registry newContext bundle
                                 |> Random.map
                                     (\res ->
                                         BundleRef
@@ -174,11 +221,11 @@ rollOnRef registry r =
                             Debug.todo ("unfindable table/bundle in registry: " ++ pathString ref.path)
 
         BundleRef ref ->
-            rollOnBundle registry (Debug.log "bundle" ref.bundle)
+            rollOnBundle registry newContext (Debug.log "bundle" ref.bundle)
                 |> Random.map (updateBundle ref)
 
         RolledTable ref ->
-            rollOnRef registry (Ref { path = ref.path, instructions = ref.instructions, title = Just ref.title })
+            rollOnRef registry newContext (Ref { path = ref.path, instructions = ref.instructions, title = Just ref.title })
 
 
 onlyOneRollCount : RollInstructions -> RollInstructions
@@ -191,8 +238,8 @@ updateRowResult rowIndex newResult rolledTable =
     { rolledTable | result = List.Extra.setAt rowIndex newResult rolledTable.result }
 
 
-rerollSingleTableRow : Registry -> RollableRef -> Int -> Generator RollableRef
-rerollSingleTableRow registry r rowIndex =
+rerollSingleTableRow : Registry -> Context -> RollableRef -> Int -> Generator RollableRef
+rerollSingleTableRow registry context r rowIndex =
     case r of
         RolledTable ref ->
             case findTableSource registry ref.path of
@@ -200,7 +247,7 @@ rerollSingleTableRow registry r rowIndex =
                     let
                         newRowRoll =
                             -- TODO: modify instructions for "ignore" using existing table context
-                            rollOnTable table (onlyOneRollCount ref.instructions)
+                            rollOnTable table (addToContextFromResults ref.result context) (onlyOneRollCount ref.instructions)
                     in
                     newRowRoll
                         |> Random.map

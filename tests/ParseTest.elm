@@ -1,6 +1,6 @@
 module ParseTest exposing (..)
 
-import Dice exposing (Expr(..), FormulaTerm(..), Range, RollableText(..), RollableValue(..))
+import Dice exposing (Expr(..), FormulaTerm(..), Range, RolledValue(..), RowTextComponent(..))
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, intRange, tuple)
 import Parse exposing (ParsedRow, expression)
@@ -24,7 +24,7 @@ parseRow =
     Parser.run Parse.row
 
 
-parseRowText : String -> Result (List Parser.DeadEnd) (List RollableText)
+parseRowText : String -> Result (List Parser.DeadEnd) (List RowTextComponent)
 parseRowText =
     Parser.run Parse.rowText
 
@@ -111,7 +111,7 @@ expectParsedRowResult row input =
         (Ok row)
 
 
-expectParsedRowTextResult : List RollableText -> String -> Expectation
+expectParsedRowTextResult : List RowTextComponent -> String -> Expectation
 expectParsedRowTextResult rowText input =
     Expect.equal
         (Ok rowText)
@@ -199,13 +199,13 @@ suite =
             [ test "parses rollable value (like [[@foo:2d6+1]])"
                 (\_ ->
                     expectParsedRowTextResult
-                        [ RollableText (RollableValue { var = "foo", expression = diceExprWithConstant 2 6 1 }) ]
+                        [ RollableText { var = "foo", expression = diceExprWithConstant 2 6 1, value = UnrolledValue } ]
                         "[[@foo:2d6+1]]"
                 )
             , test "parses rollable value (like [[@foo:2d6]])"
                 (\_ ->
                     expectParsedRowTextResult
-                        [ RollableText (RollableValue { var = "foo", expression = diceExpr 2 6 }) ]
+                        [ RollableText { var = "foo", expression = diceExpr 2 6, value = UnrolledValue } ]
                         "[[@foo:2d6]]"
                 )
             , test
@@ -218,7 +218,7 @@ suite =
                 (\_ ->
                     expectParsedRowTextResult
                         [ PlainText "abc "
-                        , RollableText (RollableValue { var = "foo", expression = diceExpr 2 6 })
+                        , RollableText { var = "foo", expression = diceExpr 2 6, value = UnrolledValue }
                         , PlainText " def"
                         ]
                         "abc [[@foo:2d6]] def"

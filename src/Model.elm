@@ -10,7 +10,8 @@ import Loader exposing (RollableLoadResult, loadTable)
 import Maybe exposing (withDefault)
 import Random
 import Roll exposing (rerollSingleTableRow, rollOnRef)
-import Rollable exposing (IndexPath, Registry, Rollable(..), RollableRef(..), refAtIndex, replaceAtIndex, simpleRef)
+import RollContext exposing (Context, refAtIndex)
+import Rollable exposing (IndexPath, Registry, Rollable(..), RollableRef(..), replaceAtIndex, simpleRef)
 import Scroll exposing (jumpToBottom)
 import Search exposing (fuzzySearch)
 import Task
@@ -120,6 +121,11 @@ debounceConfig =
     }
 
 
+noContext : Context
+noContext =
+    Dict.empty
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
@@ -144,17 +150,17 @@ update msg model =
         Roll rollWhere ->
             case rollWhere of
                 Reroll index ->
-                    case ( refAtIndex index model.results, model.registry ) of
-                        ( Just ref, TableDirectory registry ) ->
-                            ( model, Random.generate (DidRoll index) (rollOnRef registry ref) )
+                    case ( refAtIndex index noContext model.results, model.registry ) of
+                        ( Just ( context, ref ), TableDirectory registry ) ->
+                            ( model, Random.generate (DidRoll index) (rollOnRef registry context ref) )
 
                         _ ->
                             ( model, Debug.log "none found!" Cmd.none )
 
                 RerollSingleRow index rowIndex ->
-                    case ( refAtIndex index model.results, model.registry ) of
-                        ( Just ref, TableDirectory registry ) ->
-                            ( model, Random.generate (DidRoll index) (rerollSingleTableRow registry ref rowIndex) )
+                    case ( refAtIndex index noContext model.results, model.registry ) of
+                        ( Just ( context, ref ), TableDirectory registry ) ->
+                            ( model, Random.generate (DidRoll index) (rerollSingleTableRow registry context ref rowIndex) )
 
                         _ ->
                             ( model, Debug.log "none found!" Cmd.none )
@@ -165,7 +171,7 @@ update msg model =
                             ( model
                             , Random.generate
                                 RollNew
-                                (rollOnRef registry ref)
+                                (rollOnRef registry noContext ref)
                             )
 
                         _ ->
