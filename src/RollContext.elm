@@ -7,7 +7,17 @@ import Rollable exposing (IndexPath, RollableRef(..), TableRollResult(..), table
 
 
 type alias Context =
-    Dict String Int
+    ( Int, Dict String Int )
+
+
+increaseDepth : Context -> Context
+increaseDepth =
+    Tuple.mapFirst ((+) 1)
+
+
+depth : Context -> Int
+depth =
+    Tuple.first
 
 
 addToContextFromRowTextComponent : RowTextComponent -> Context -> Context
@@ -16,7 +26,8 @@ addToContextFromRowTextComponent text context =
         RollableText t ->
             case t.value of
                 ValueResult v ->
-                    Dict.insert t.var v context
+                    context
+                        |> (Dict.insert t.var v |> Tuple.mapSecond)
 
                 _ ->
                     context
@@ -54,8 +65,7 @@ addToContextFromRef ref context =
 
 contextFromRef : RollableRef -> Context
 contextFromRef ref =
-    Dict.empty
-        |> addToContextFromRef ref
+    addToContextFromRef ref ( 0, Dict.empty )
 
 
 refAtIndex : IndexPath -> Context -> List RollableRef -> Maybe ( Context, RollableRef )

@@ -7,7 +7,7 @@ import List.Extra
 import Maybe exposing (withDefault)
 import Random exposing (..)
 import Random.Extra exposing (sequence)
-import RollContext exposing (Context, addToContextFromRef, addToContextFromResults)
+import RollContext exposing (Context, addToContextFromRef, addToContextFromResult, addToContextFromResults, depth, increaseDepth)
 import Rollable
     exposing
         ( Bundle
@@ -15,7 +15,6 @@ import Rollable
         , Registry
         , RollInstructions
         , RollableRef(..)
-        , Row
         , TableRollResult(..)
         , TableSource
         , Variable(..)
@@ -28,11 +27,6 @@ import Rollable
         )
 
 
-pickRowFromTable : List Row -> Generator TableRollResult
-pickRowFromTable rows =
-    Random.map (rollResultForRollOnTable rows) (Random.int 1 (List.length rows))
-
-
 evaluateVariable : Context -> Variable -> Int
 evaluateVariable context variable =
     case variable of
@@ -40,7 +34,7 @@ evaluateVariable context variable =
             v
 
         ContextKey k ->
-            case Dict.get k context of
+            case Dict.get k (Tuple.second context) of
                 Just v ->
                     v
 
@@ -68,14 +62,14 @@ siblingResultNumbers res =
             [ err.rollTotal ]
 
 
-rollOnTable : TableSource -> Context -> RollInstructions -> Generator (List TableRollResult)
-rollOnTable source context instructions =
+rollOnTable : Registry -> TableSource -> Context -> RollInstructions -> Generator (List TableRollResult)
+rollOnTable registry source context instructions =
     let
         rollCount =
             evaluateVariable context (withDefault (ConstValue 1) instructions.rollCount)
 
         doRoll =
-            rollSingleRowOnTable context source
+            rollSingleRowOnTable registry context source
     in
     doRoll instructions
         |> andThen
@@ -100,12 +94,12 @@ rollOnTable source context instructions =
                     in
                     map2 (::)
                         (Random.constant r)
-                        (rollOnTable source context modifiedInstructions)
+                        (rollOnTable registry source context modifiedInstructions)
             )
 
 
-rollSingleRowOnTable : Context -> TableSource -> RollInstructions -> Generator TableRollResult
-rollSingleRowOnTable context source instructions =
+rollSingleRowOnTable : Registry -> Context -> TableSource -> RollInstructions -> Generator TableRollResult
+rollSingleRowOnTable registry context source instructions =
     let
         dice =
             instructions.dice |> withDefault source.dice
@@ -123,10 +117,21 @@ rollSingleRowOnTable context source instructions =
                         rollResultNumber r
                 in
                 if List.member rollNumber ignore then
-                    rollSingleRowOnTable context source instructions
+                    rollSingleRowOnTable registry context source instructions
 
                 else
                     evaluateRollResult r
+                        |> andThen
+                            (\newR ->
+                                if depth context > 10 then
+                                    constant newR
+
+                                else
+                                    rollRefsForTableResult
+                                        registry
+                                        (addToContextFromResult newR (increaseDepth context))
+                                        newR
+                            )
             )
 
 
@@ -182,6 +187,27 @@ otherwiseMaybe value fallback =
             value
 
 
+rollRefsForTableResult : Registry -> Context -> TableRollResult -> Generator TableRollResult
+rollRefsForTableResult registry context res =
+    let
+        _ =
+            Debug.log "context" (Dict.keys (Tuple.second context))
+    in
+    case res of
+        RolledRow rr ->
+            let
+                evalRow =
+                    rr.result
+            in
+            List.map (rollOnRef registry context) evalRow.refs
+                |> sequence
+                |> map (\refs -> { evalRow | refs = refs })
+                |> map (\e -> RolledRow { rr | result = e })
+
+        _ ->
+            constant res
+
+
 rollOnRef : Registry -> Context -> RollableRef -> Generator RollableRef
 rollOnRef registry context r =
     let
@@ -192,7 +218,7 @@ rollOnRef registry context r =
         Ref ref ->
             case findTableSource registry ref.path of
                 Just table ->
-                    rollOnTable table newContext ref.instructions
+                    rollOnTable registry table newContext ref.instructions
                         |> Random.map
                             (\res ->
                                 RolledTable
@@ -247,7 +273,11 @@ rerollSingleTableRow registry context r rowIndex =
                     let
                         newRowRoll =
                             -- TODO: modify instructions for "ignore" using existing table context
-                            rollOnTable table (addToContextFromResults ref.result context) (onlyOneRollCount ref.instructions)
+                            rollOnTable
+                                registry
+                                table
+                                (addToContextFromResults ref.result context)
+                                (onlyOneRollCount ref.instructions)
                     in
                     newRowRoll
                         |> Random.map

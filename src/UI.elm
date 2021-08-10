@@ -237,7 +237,7 @@ ref ip rr =
 
 
 app =
-    column [ height fill, width fill, spacing 10 ]
+    column [ height fill, width fill ]
 
 
 ui : Model -> Html Msg

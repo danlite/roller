@@ -121,9 +121,9 @@ debounceConfig =
     }
 
 
-noContext : Context
-noContext =
-    Dict.empty
+rootContext : Context
+rootContext =
+    ( 0, Dict.empty )
 
 
 maybeLog : Bool -> String -> a -> a
@@ -159,7 +159,7 @@ update msg model =
         Roll rollWhere ->
             case rollWhere of
                 Reroll index ->
-                    case ( refAtIndex index noContext model.results, model.registry ) of
+                    case ( refAtIndex index rootContext model.results, model.registry ) of
                         ( Just ( context, ref ), TableDirectory registry ) ->
                             ( model, Random.generate (DidRoll index) (rollOnRef registry context ref) )
 
@@ -167,7 +167,7 @@ update msg model =
                             ( model, Debug.log "none found!" Cmd.none )
 
                 RerollSingleRow index rowIndex ->
-                    case ( refAtIndex index noContext model.results, model.registry ) of
+                    case ( refAtIndex index rootContext model.results, model.registry ) of
                         ( Just ( context, ref ), TableDirectory registry ) ->
                             ( model, Random.generate (DidRoll index) (rerollSingleTableRow registry context ref rowIndex) )
 
@@ -180,7 +180,7 @@ update msg model =
                             ( model
                             , Random.generate
                                 RollNew
-                                (rollOnRef registry noContext ref)
+                                (rollOnRef registry rootContext ref)
                             )
 
                         _ ->
