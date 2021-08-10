@@ -1,7 +1,7 @@
 module Parse exposing (..)
 
 import Char exposing (isDigit)
-import Dice exposing (Expr(..), FormulaTerm(..), Range, RollableValue, RolledValue(..), RowTextComponent(..), makeRange, makeSingleRange)
+import Dice exposing (Expr(..), FormulaTerm(..), InputPlaceholderModifiers, Range, RollableValue, RolledValue(..), RowTextComponent(..), makeRange, makeSingleRange)
 import Parser exposing (..)
 import Set
 import String exposing (toInt)
@@ -230,14 +230,35 @@ plainText =
     succeed PlainText
         |= (getChompedString <|
                 succeed ()
-                    |. chompUntilEndOr "[["
+                    |. chompUntilEndOr "["
            )
+
+
+inputPlaceholder : Parser RowTextComponent
+inputPlaceholder =
+    succeed InputPlaceholder
+        |. symbol "["
+        |= variable { start = Char.isAlpha, inner = \c -> Char.isAlphaNum c || (c == '-'), reserved = Set.empty }
+        |= inputPlaceholderModifiers
+
+
+inputPlaceholderModifiers : Parser InputPlaceholderModifiers
+inputPlaceholderModifiers =
+    oneOf
+        [ succeed {}
+            |. symbol "]"
+        , succeed {}
+            |. symbol ":"
+            |. chompUntil "]"
+            |. symbol "]"
+        ]
 
 
 rollableText : Parser RowTextComponent
 rollableText =
     oneOf
         [ rollableValue
+        , inputPlaceholder
         , plainText
         ]
 

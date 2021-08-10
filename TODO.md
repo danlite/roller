@@ -1,6 +1,5 @@
 - TESTS
-- parse table inputs (e.g. name generators)
-  - row text replacement
+- store table variables in bundle context
 - simpler nested results state?
 - "pass-through" tables?
   - e.g. for:

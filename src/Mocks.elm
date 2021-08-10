@@ -1,6 +1,7 @@
 module Mocks exposing (..)
 
 import Dice exposing (Range, RowTextComponent(..), makeSingleRange)
+import Dict
 import Rollable exposing (Bundle, Path(..), RollInstructions, RollableRef(..), Row, TableRollResult(..))
 
 
@@ -15,12 +16,18 @@ mockRolledRow refs =
         { result = { refs = refs, text = [ PlainText "PlainText" ] }
         , rollTotal = 3
         , range = makeSingleRange 3
+        , inputs = Dict.empty
         }
 
 
 mockRolledTable : String -> String -> List TableRollResult -> RollableRef
 mockRolledTable path title result =
-    RolledTable { path = ResolvedPath path, instructions = mockRollInstructions, result = result, title = title }
+    RolledTable
+        { path = ResolvedPath path
+        , instructions = mockRollInstructions
+        , result = result
+        , title = title
+        }
 
 
 mockRollInstructions : RollInstructions

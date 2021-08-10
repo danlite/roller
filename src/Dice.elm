@@ -32,9 +32,14 @@ type RolledValue
     | ValueResult Int
 
 
+type alias InputPlaceholderModifiers =
+    {}
+
+
 type RowTextComponent
     = PlainText String
     | RollableText RollableValue
+    | InputPlaceholder String InputPlaceholderModifiers
 
 
 formulaTermString : FormulaTerm -> String

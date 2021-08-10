@@ -1,7 +1,7 @@
 module Roll exposing (..)
 
 import Dice exposing (Die, Expr(..), FormulaTerm(..), RollableValue, RolledValue(..), RowTextComponent(..), rangeMembers)
-import Dict
+import Dict exposing (Dict)
 import List exposing (sum)
 import List.Extra
 import Maybe exposing (withDefault)
@@ -12,6 +12,7 @@ import Rollable
     exposing
         ( Bundle
         , EvaluatedRow
+        , Inputs
         , Registry
         , RollInstructions
         , RollableRef(..)
@@ -23,6 +24,7 @@ import Rollable
         , findTableSource
         , pathString
         , rollResultForRollOnTable
+        , rolledInputsAsText
         , updateBundle
         )
 
@@ -75,7 +77,7 @@ rollOnTable registry source context instructions =
         |> andThen
             (\r ->
                 if rollCount == 1 then
-                    Random.constant r
+                    constant r
                         |> List.singleton
                         |> sequence
 
@@ -93,9 +95,21 @@ rollOnTable registry source context instructions =
                             }
                     in
                     map2 (::)
-                        (Random.constant r)
+                        (constant r)
                         (rollOnTable registry source context modifiedInstructions)
             )
+
+
+rollRefsIfNotTooDeep : Registry -> Context -> TableRollResult -> Generator TableRollResult
+rollRefsIfNotTooDeep registry context res =
+    if depth context > 10 then
+        constant res
+
+    else
+        rollRefsForTableResult
+            registry
+            (addToContextFromResult res (increaseDepth context))
+            res
 
 
 rollSingleRowOnTable : Registry -> Context -> TableSource -> RollInstructions -> Generator TableRollResult
@@ -106,10 +120,13 @@ rollSingleRowOnTable registry context source instructions =
 
         ignore =
             instructions.ignore |> List.map (evaluateVariable context)
+
+        rerolledInputs =
+            rollInputs registry context source.inputs
     in
     rollExpr dice
         |> map evaluateExpr
-        |> map (rollResultForRollOnTable source.rows)
+        |> map2 (rollResultForRollOnTable source.rows) rerolledInputs
         |> andThen
             (\r ->
                 let
@@ -121,17 +138,7 @@ rollSingleRowOnTable registry context source instructions =
 
                 else
                     evaluateRollResult r
-                        |> andThen
-                            (\newR ->
-                                if depth context > 10 then
-                                    constant newR
-
-                                else
-                                    rollRefsForTableResult
-                                        registry
-                                        (addToContextFromResult newR (increaseDepth context))
-                                        newR
-                            )
+                        |> andThen (rollRefsIfNotTooDeep registry context)
             )
 
 
@@ -155,12 +162,12 @@ evaluateRowText row =
 rollText : RowTextComponent -> Generator RowTextComponent
 rollText text =
     case text of
-        PlainText _ ->
-            constant text
-
         RollableText v ->
             rollValue v
                 |> map RollableText
+
+        _ ->
+            constant text
 
 
 rollValue : { a | var : String, expression : Expr } -> Generator RollableValue
@@ -173,8 +180,8 @@ rollValue v =
 rollOnBundle : Registry -> Context -> Bundle -> Generator Bundle
 rollOnBundle registry context bundle =
     List.map (rollOnRef registry context) bundle.tables
-        |> Random.Extra.sequence
-        |> Random.map (\refs -> { bundle | tables = refs })
+        |> sequence
+        |> map (\refs -> { bundle | tables = refs })
 
 
 otherwiseMaybe : Maybe a -> Maybe a -> Maybe a
@@ -189,10 +196,6 @@ otherwiseMaybe value fallback =
 
 rollRefsForTableResult : Registry -> Context -> TableRollResult -> Generator TableRollResult
 rollRefsForTableResult registry context res =
-    let
-        _ =
-            Debug.log "context" (Dict.keys (Tuple.second context))
-    in
     case res of
         RolledRow rr ->
             let
@@ -208,6 +211,14 @@ rollRefsForTableResult registry context res =
             constant res
 
 
+rollInputs : Registry -> Context -> Dict comparable RollableRef -> Generator (Dict comparable RollableRef)
+rollInputs registry context inputs =
+    Dict.map
+        (\_ v -> rollOnRef registry context v)
+        inputs
+        |> mapDict
+
+
 rollOnRef : Registry -> Context -> RollableRef -> Generator RollableRef
 rollOnRef registry context r =
     let
@@ -218,22 +229,22 @@ rollOnRef registry context r =
         Ref ref ->
             case findTableSource registry ref.path of
                 Just table ->
-                    rollOnTable registry table newContext ref.instructions
-                        |> Random.map
-                            (\res ->
-                                RolledTable
-                                    { path = ref.path
-                                    , instructions = ref.instructions
-                                    , result = res
-                                    , title = ref.instructions.title |> withDefault table.title
-                                    }
-                            )
+                    map
+                        (\res ->
+                            RolledTable
+                                { path = ref.path
+                                , instructions = ref.instructions
+                                , result = res
+                                , title = ref.instructions.title |> withDefault table.title
+                                }
+                        )
+                        (rollOnTable registry table newContext ref.instructions)
 
                 _ ->
                     case findBundleSource registry ref.path of
                         Just bundle ->
                             rollOnBundle registry newContext bundle
-                                |> Random.map
+                                |> map
                                     (\res ->
                                         BundleRef
                                             { bundle = res
@@ -248,10 +259,36 @@ rollOnRef registry context r =
 
         BundleRef ref ->
             rollOnBundle registry newContext ref.bundle
-                |> Random.map (updateBundle ref)
+                |> map (updateBundle ref)
 
         RolledTable ref ->
             rollOnRef registry newContext (Ref { path = ref.path, instructions = ref.instructions, title = Just ref.title })
+
+
+mapDict : Dict comparable (Generator v) -> Generator (Dict comparable v)
+mapDict d =
+    Dict.toList d
+        |> List.map mapTupleFirst
+        |> List.foldl
+            (map2
+                (\tuple newDict ->
+                    Dict.insert (Tuple.first tuple) (Tuple.second tuple) newDict
+                )
+            )
+            (constant Dict.empty)
+
+
+mapTuple : ( Generator a, Generator b ) -> Generator ( a, b )
+mapTuple tuple =
+    map2
+        (\a b -> ( a, b ))
+        (Tuple.first tuple)
+        (Tuple.second tuple)
+
+
+mapTupleFirst : ( a, Generator b ) -> Generator ( a, b )
+mapTupleFirst tuple =
+    mapTuple <| Tuple.mapFirst constant tuple
 
 
 onlyOneRollCount : RollInstructions -> RollInstructions
@@ -280,7 +317,7 @@ rerollSingleTableRow registry context r rowIndex =
                                 (onlyOneRollCount ref.instructions)
                     in
                     newRowRoll
-                        |> Random.map
+                        |> map
                             (List.head
                                 >> Maybe.map
                                     (\rollResult ->
@@ -290,14 +327,14 @@ rerollSingleTableRow registry context r rowIndex =
                             )
 
                 _ ->
-                    Random.constant r
+                    constant r
 
         _ ->
-            Random.constant r
+            constant r
 
 
 type alias ExprRoller =
-    Random.Generator RolledExpr
+    Generator RolledExpr
 
 
 rollFormulaTerm : FormulaTerm -> FormulaTermRoller
@@ -314,13 +351,13 @@ rollExpr : Expr -> ExprRoller
 rollExpr expr =
     case expr of
         Term term ->
-            Random.map RolledTerm (rollFormulaTerm term)
+            map RolledTerm (rollFormulaTerm term)
 
         Add e1 e2 ->
-            Random.map2 RolledAdd (rollExpr e1) (rollExpr e2)
+            map2 RolledAdd (rollExpr e1) (rollExpr e2)
 
         Sub e1 e2 ->
-            Random.map2 RolledSub (rollExpr e1) (rollExpr e2)
+            map2 RolledSub (rollExpr e1) (rollExpr e2)
 
 
 type alias RolledConstant =
@@ -328,8 +365,8 @@ type alias RolledConstant =
 
 
 rollConstant : Int -> FormulaTermRoller
-rollConstant constant =
-    Random.map RolledConstant (Random.constant constant)
+rollConstant c =
+    map RolledConstant (constant c)
 
 
 type RolledFormulaTerm
@@ -338,7 +375,7 @@ type RolledFormulaTerm
 
 
 type alias FormulaTermRoller =
-    Random.Generator RolledFormulaTerm
+    Generator RolledFormulaTerm
 
 
 valueOf : RolledFormulaTerm -> Int
@@ -356,12 +393,12 @@ type alias RolledDie =
 
 
 type alias DieRoller =
-    Random.Generator RolledDie
+    Generator RolledDie
 
 
 rollDie : Die -> DieRoller
 rollDie die =
-    Random.map RolledDie (Random.int 1 die.sides)
+    map RolledDie (int 1 die.sides)
 
 
 type alias RolledMultiDie =
@@ -369,14 +406,14 @@ type alias RolledMultiDie =
 
 
 type alias MultiDieRoller =
-    Random.Generator RolledMultiDie
+    Generator RolledMultiDie
 
 
 rollMultiDie :
     { count : Int, sides : Int }
     -> FormulaTermRoller
 rollMultiDie multiDie =
-    Random.map RolledMultiDie (Random.list multiDie.count (rollDie (Die multiDie.sides)))
+    map RolledMultiDie (list multiDie.count (rollDie (Die multiDie.sides)))
 
 
 type RolledExpr

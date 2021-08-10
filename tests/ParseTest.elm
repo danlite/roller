@@ -3,30 +3,11 @@ module ParseTest exposing (..)
 import Dice exposing (Expr(..), FormulaTerm(..), Range, RolledValue(..), RowTextComponent(..))
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, intRange, tuple)
-import Parse exposing (ParsedRow, expression)
+import Parse
 import Parser
 import Random exposing (maxInt)
 import String exposing (fromInt)
 import Test exposing (..)
-
-
-
--- Parsing helpers
-
-
-parseExpression : String -> Result (List Parser.DeadEnd) Expr
-parseExpression =
-    Parser.run expression
-
-
-parseRow : String -> Result (List Parser.DeadEnd) ParsedRow
-parseRow =
-    Parser.run Parse.row
-
-
-parseRowText : String -> Result (List Parser.DeadEnd) (List RowTextComponent)
-parseRowText =
-    Parser.run Parse.rowText
 
 
 
@@ -97,25 +78,30 @@ subtractionExpr n1 n2 =
 -- Expectation helpers
 
 
-expectParsedExpressionResult : Expr -> String -> Expectation
-expectParsedExpressionResult expr input =
+expectParseResult : Parser.Parser a -> a -> String -> Expectation
+expectParseResult parser value input =
     Expect.equal
-        (parseExpression input)
-        (Ok expr)
+        (Parser.run parser input)
+        (Ok value)
+
+
+expectParsedExpressionResult : Expr -> String -> Expectation
+expectParsedExpressionResult =
+    expectParseResult Parse.expression
 
 
 expectParsedRowResult : Parse.ParsedRow -> String -> Expectation
-expectParsedRowResult row input =
-    Expect.equal
-        (parseRow input)
-        (Ok row)
+expectParsedRowResult =
+    expectParseResult Parse.row
 
 
 expectParsedRowTextResult : List RowTextComponent -> String -> Expectation
-expectParsedRowTextResult rowText input =
-    Expect.equal
-        (Ok rowText)
-        (parseRowText input)
+expectParsedRowTextResult =
+    expectParseResult Parse.rowText
+
+
+expectParsedInputPlaceholderResult =
+    expectParseResult Parse.inputPlaceholder
 
 
 suite : Test
@@ -222,6 +208,20 @@ suite =
                         , PlainText " def"
                         ]
                         "abc [[@foo:2d6]] def"
+                )
+            , test
+                "parses only input placeholder"
+                (\_ ->
+                    expectParsedRowTextResult
+                        [ InputPlaceholder "FirstName" {}
+                        ]
+                        "[FirstName]"
+                )
+            , test "parses input placeholder"
+                (\_ ->
+                    expectParsedInputPlaceholderResult
+                        (InputPlaceholder "FirstName" {})
+                        "[FirstName:feq2490@#]"
                 )
             , todo "parses percents"
             ]

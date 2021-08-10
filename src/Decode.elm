@@ -8,10 +8,11 @@ import Dice
         , makeSingleRange
         , rangeMembers
         )
+import Dict exposing (Dict)
 import Parse exposing (ParsedRow(..), row)
 import Parser
 import Rollable exposing (RollInstructions, Rollable(..), RollableRef(..), RollableRefData, Row, UnresolvedRollableRefData, Variable(..), resolvePathInContext)
-import Yaml.Decode exposing (Decoder, andMap, andThen, bool, fail, field, list, map, map2, map3, maybe, oneOf, string, succeed)
+import Yaml.Decode exposing (Decoder, andMap, andThen, bool, dict, fail, field, list, map, map2, map3, map4, maybe, oneOf, string, succeed)
 
 
 listWrapDecoder : Decoder v -> Decoder (List v)
@@ -139,6 +140,7 @@ type alias YamlTableFields =
     { title : String
     , dice : Maybe Expr
     , rows : List YamlRow
+    , inputs : Dict String UnresolvedRollableRefData
     }
 
 
@@ -173,7 +175,7 @@ diceFromRowList rows =
 
 tableDecoder : Decoder YamlFile
 tableDecoder =
-    map3
+    map4
         YamlTableFields
         (field "title" string)
         (maybe (field "dice" string)
@@ -195,6 +197,17 @@ tableDecoder =
         )
         (field "rows"
             (list rowDecoder)
+        )
+        (maybe (field "inputs" (dict unresolvedTableRefDecoder))
+            |> andThen
+                (\maybeDict ->
+                    case maybeDict of
+                        Nothing ->
+                            succeed Dict.empty
+
+                        Just dict ->
+                            succeed dict
+                )
         )
         |> map YamlTable
 
@@ -272,7 +285,7 @@ finalize path yamlFile =
             in
             RollableTable
                 { rows = rows
-                , inputs = []
+                , inputs = table.inputs |> Dict.map (\_ v -> resolveTableRef path v |> Ref)
                 , path = path
                 , title = table.title
                 , dice =

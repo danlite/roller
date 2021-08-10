@@ -93,13 +93,13 @@ simpleRef path =
 
 
 type TableRollResult
-    = RolledRow { result : EvaluatedRow, rollTotal : Int, range : Range }
+    = RolledRow { result : EvaluatedRow, rollTotal : Int, range : Range, inputs : Inputs }
     | MissingRowError { rollTotal : Int }
 
 
 type alias TableSource =
     { rows : List Row
-    , inputs : List RollableRef
+    , inputs : Dict String RollableRef
     , path : String
     , title : String
     , dice : Expr
@@ -118,6 +118,52 @@ type Rollable
 
 type alias Registry =
     Dict String Rollable
+
+
+type alias Inputs =
+    Dict String RollableRef
+
+
+rolledInputsAsText : Inputs -> Dict String String
+rolledInputsAsText =
+    Dict.map (\_ v -> rolledRefAsText v)
+
+
+rolledRefAsText : RollableRef -> String
+rolledRefAsText ref =
+    case ref of
+        RolledTable table ->
+            case List.head table.result of
+                Just res ->
+                    case res of
+                        RolledRow row ->
+                            plainRowText row.result.text
+
+                        _ ->
+                            "[???]"
+
+                _ ->
+                    "[???]"
+
+        _ ->
+            "[???]"
+
+
+plainRowText : List RowTextComponent -> String
+plainRowText =
+    List.map
+        (\rtc ->
+            case rtc of
+                PlainText t ->
+                    t
+
+                RollableText t ->
+                    t.var
+
+                InputPlaceholder t _ ->
+                    t
+        )
+        >> String.join ""
 
 
 aRegistry : Registry
@@ -276,19 +322,28 @@ findBundleSource registry path =
             Nothing
 
 
-rollResultForRollOnTable : List Row -> Int -> TableRollResult
-rollResultForRollOnTable rows rollTotal =
+rollResultForRollOnTable : List Row -> Inputs -> Int -> TableRollResult
+rollResultForRollOnTable rows inputs rollTotal =
     case List.Extra.find (\r -> rangeIncludes rollTotal r.range) rows of
         Just row ->
+            let
+                rowText =
+                    if String.startsWith ">- " row.text then
+                        String.dropLeft 3 row.text
+
+                    else
+                        row.text
+            in
             RolledRow
                 { result =
                     EvaluatedRow
-                        (Result.withDefault [ PlainText row.text ]
-                            (Parser.run Parse.rowText row.text)
+                        (Result.withDefault [ PlainText rowText ]
+                            (Parser.run Parse.rowText rowText)
                         )
                         row.refs
                 , rollTotal = rollTotal
                 , range = row.range
+                , inputs = inputs
                 }
 
         _ ->
@@ -400,7 +455,6 @@ replaceRefInRow targetIndex prevIndex update row =
             prevIndex + List.length row.refs
     in
     if prevIndex <= targetIndex && targetIndex <= rowLastIndex then
-        -- do the thing
         let
             relIndex =
                 targetIndex - prevIndex

@@ -1,6 +1,7 @@
 module UI exposing (..)
 
 import Dice exposing (RolledValue(..), RowTextComponent(..))
+import Dict exposing (Dict)
 import Element exposing (..)
 import Element.Border as Border
 import Element.Font as Font
@@ -12,12 +13,14 @@ import Model exposing (Model, Msg(..), Roll(..))
 import Rollable
     exposing
         ( IndexPath
+        , Inputs
         , RollableRef(..)
         , RollableRefData
         , TableRollResult(..)
         , WithBundle
         , WithTableResult
         , pathString
+        , rolledRefAsText
         )
 import String exposing (fromInt)
 import UI.Search exposing (expressionString, search)
@@ -102,13 +105,16 @@ table ip t =
             t.result
 
 
-rolledText : List RowTextComponent -> List (Element Msg)
-rolledText =
+rolledText : Inputs -> List RowTextComponent -> List (Element Msg)
+rolledText inputs =
     List.map
         (\rt ->
             case rt of
                 PlainText pt ->
                     text pt
+
+                InputPlaceholder key _ ->
+                    Maybe.withDefault ("?" ++ key ++ "?") (Dict.get key inputs |> Maybe.map rolledRefAsText) |> text
 
                 RollableText rv ->
                     parentheses
@@ -212,6 +218,7 @@ tableRollResult ip ri res =
                 [ rollRow
                     r.rollTotal
                     [ rolledText
+                        r.inputs
                         r.result.text
                         |> paragraph []
                     , rollRowButton ip ri
