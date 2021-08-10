@@ -7,7 +7,7 @@ import List.Extra
 import Maybe exposing (withDefault)
 import Random exposing (..)
 import Random.Extra exposing (sequence)
-import RollContext exposing (Context, addToContextFromRef, addToContextFromResults, logContext)
+import RollContext exposing (Context, addToContextFromRef, addToContextFromResults)
 import Rollable
     exposing
         ( Bundle
@@ -40,7 +40,7 @@ evaluateVariable context variable =
             v
 
         ContextKey k ->
-            case Dict.get k (logContext context) of
+            case Dict.get k context of
                 Just v ->
                     v
 
@@ -72,7 +72,7 @@ rollOnTable : TableSource -> Context -> RollInstructions -> Generator (List Tabl
 rollOnTable source context instructions =
     let
         rollCount =
-            Debug.log "rollCount" (evaluateVariable context (withDefault (ConstValue 1) instructions.rollCount))
+            evaluateVariable context (withDefault (ConstValue 1) instructions.rollCount)
 
         doRoll =
             rollSingleRowOnTable context source
@@ -100,7 +100,7 @@ rollOnTable source context instructions =
                     in
                     map2 (::)
                         (Random.constant r)
-                        (rollOnTable source context (Debug.log "modifiedInstructions" modifiedInstructions))
+                        (rollOnTable source context modifiedInstructions)
             )
 
 
@@ -122,7 +122,7 @@ rollSingleRowOnTable context source instructions =
                     rollNumber =
                         rollResultNumber r
                 in
-                if List.member (Debug.log "rollNumber" rollNumber) ignore then
+                if List.member rollNumber ignore then
                     rollSingleRowOnTable context source instructions
 
                 else
@@ -221,7 +221,7 @@ rollOnRef registry context r =
                             Debug.todo ("unfindable table/bundle in registry: " ++ pathString ref.path)
 
         BundleRef ref ->
-            rollOnBundle registry newContext (Debug.log "bundle" ref.bundle)
+            rollOnBundle registry newContext ref.bundle
                 |> Random.map (updateBundle ref)
 
         RolledTable ref ->

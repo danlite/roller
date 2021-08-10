@@ -3,23 +3,11 @@ module RollContext exposing (..)
 import Dice exposing (RolledValue(..), RowTextComponent(..))
 import Dict exposing (Dict)
 import List.Extra
-import Rollable exposing (IndexPath, RollableRef(..), TableRollResult(..), tableRollResultRefs, tableRollResultsRefs)
+import Rollable exposing (IndexPath, RollableRef(..), TableRollResult(..), tableRollResultsRefs)
 
 
 type alias Context =
     Dict String Int
-
-
-logContext : Context -> Context
-logContext context =
-    let
-        _ =
-            Debug.log "keys" (Dict.keys context)
-
-        _ =
-            Debug.log "values" (Dict.values context)
-    in
-    context
 
 
 addToContextFromRowTextComponent : RowTextComponent -> Context -> Context

@@ -126,6 +126,15 @@ noContext =
     Dict.empty
 
 
+maybeLog : Bool -> String -> a -> a
+maybeLog log message value =
+    if log then
+        Debug.log message value
+
+    else
+        value
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     let
@@ -141,7 +150,7 @@ update msg model =
                     msg
 
                 _ ->
-                    Debug.log "message" msg
+                    maybeLog False "message" msg
     in
     case msg of
         NoOp ->
