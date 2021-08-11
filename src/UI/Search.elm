@@ -6,11 +6,17 @@ import Element exposing (..)
 import Element.Background as Background
 import Element.Events exposing (onFocus)
 import Element.Input as Input
+import Element.Keyed as Keyed
 import Html.Attributes
 import Html.Events exposing (onBlur)
-import Model exposing (Model, Msg(..), Roll(..), TableDirectoryState(..), maxResults, rollablePath, selectedRollable)
+import Model exposing (Model, Msg(..), Roll(..), TableDirectoryState(..), maxResults, rollablePath, selectedRollable, selectedRollablePath)
 import Rollable exposing (Rollable(..))
 import String exposing (fromInt)
+
+
+loadButton : String -> String -> Element Msg
+loadButton label filter =
+    Input.button [] { onPress = Just (RequestDirectory filter), label = text label }
 
 
 searchField : Model -> Element Msg
@@ -19,7 +25,15 @@ searchField model =
         List.singleton <|
             case model.registry of
                 TableDirectoryLoading ->
-                    text "Loading..."
+                    row [ width fill, spaceEvenly ]
+                        [ loadButton "All" ""
+                        , loadButton "Lazy DM" "/lazy-dm"
+                        , loadButton "DW PW" "/perilous-wilds"
+                        , loadButton "XGtE" "/xgte"
+                        , loadButton "UNE" "/une"
+
+                        -- , loadButton "" ""
+                        ]
 
                 TableDirectoryFailed e ->
                     text ("Error! " ++ e)
@@ -35,54 +49,89 @@ searchField model =
                         ]
                         { placeholder = Just (Input.placeholder [] (text "Table search"))
                         , onChange = InputTableSearch
-                        , text = model.tableSearchFieldText
+                        , text =
+                            let
+                                selectedPath =
+                                    if model.inSearchField then
+                                        Nothing
+
+                                    else
+                                        selectedRollablePath model
+                            in
+                            selectedPath |> Maybe.withDefault model.tableSearchFieldText
                         , label = Input.labelHidden "Table search"
                         }
 
 
+visibleResults : Model -> List String
+visibleResults =
+    List.take maxResults << .tableSearchResults
+
+
 searchResults : Model -> Element Msg
 searchResults model =
+    if model.inSearchField && (List.length (visibleResults model) > 0) then
+        searchResultsHelp model
+
+    else
+        none
+
+
+searchResultsHelp : Model -> Element Msg
+searchResultsHelp model =
     let
-        visibleResults =
-            List.take maxResults model.tableSearchResults
+        defaultAttributes =
+            [ --  Html.Attributes.style "transition" "flex 0.2s" |> htmlAttribute
+              Html.Attributes.style "transition" "max-height 0.2s" |> htmlAttribute
+            , Html.Attributes.style "height" "auto" |> htmlAttribute
+            ]
+
+        listAttributes =
+            defaultAttributes
+                ++ (if model.inSearchField then
+                        [ Html.Attributes.style "max-height" "200px" |> htmlAttribute
+                        ]
+
+                    else
+                        [ Html.Attributes.style "max-height" "0" |> htmlAttribute
+                        , Html.Attributes.style "opacity" "0" |> htmlAttribute
+                        ]
+                   )
     in
-    case List.length visibleResults of
-        0 ->
-            none
+    column listAttributes <|
+        List.map
+            (\path ->
+                row []
+                    [ el
+                        [ Html.Attributes.style "visibility"
+                            (if Just path == Maybe.map rollablePath (selectedRollable model) then
+                                ""
 
-        _ ->
-            column []
-                (List.map
-                    (\path ->
-                        row []
-                            [ el
-                                [ Html.Attributes.style "visibility"
-                                    (if Just path == Maybe.map rollablePath (selectedRollable model) then
-                                        ""
-
-                                     else
-                                        "hidden"
-                                    )
-                                    |> htmlAttribute
-                                ]
-                                (text
-                                    "→ "
-                                )
-                            , text path
-                            ]
-                    )
-                    visibleResults
-                )
+                             else
+                                "hidden"
+                            )
+                            |> htmlAttribute
+                        ]
+                        (text
+                            "→ "
+                        )
+                    , text path
+                    ]
+            )
+        <|
+            visibleResults model
 
 
 search : Model -> Element Msg
 search model =
-    column [ width fill, alignBottom, padding 10, spacing 10, Background.color (rgb 0.9 0.9 0.9) ]
-        [ row [ width fill, spacing 10 ]
-            [ searchField model
-            , Input.button [] { onPress = Roll SelectedTable |> Just, label = rollButtonText model |> text }
-            ]
-        , searchResults model
+    Keyed.column [ width fill, alignBottom, padding 10, spacing 10, Background.color (rgb 0.9 0.9 0.9) ]
+        [ ( "results", searchResults model )
+        , ( "input"
+          , row [ width fill, spacing 10 ]
+                [ searchField model
+                , rollButton model
+                ]
+          )
         ]
 
 
@@ -110,6 +159,16 @@ rollButtonTextForRollable rollable =
 
         _ ->
             ""
+
+
+rollButton : Model -> Element Msg
+rollButton model =
+    case model.registry of
+        TableDirectory _ ->
+            Input.button [] { onPress = Roll SelectedTable |> Just, label = rollButtonText model |> text }
+
+        _ ->
+            none
 
 
 rollButtonText : Model -> String

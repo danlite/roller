@@ -12,7 +12,7 @@ import Dict exposing (Dict)
 import Parse exposing (ParsedRow(..), row)
 import Parser
 import Rollable exposing (RollInstructions, Rollable(..), RollableRef(..), RollableRefData, Row, UnresolvedRollableRefData, Variable(..), resolvePathInContext)
-import Yaml.Decode exposing (Decoder, andMap, andThen, bool, dict, fail, field, list, map, map2, map3, map4, maybe, oneOf, string, succeed)
+import Yaml.Decode exposing (Decoder, andMap, andThen, bool, dict, fail, field, list, map, map2, map4, maybe, oneOf, string, succeed)
 
 
 listWrapDecoder : Decoder v -> Decoder (List v)

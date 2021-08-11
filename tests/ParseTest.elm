@@ -1,6 +1,6 @@
 module ParseTest exposing (..)
 
-import Dice exposing (Expr(..), FormulaTerm(..), Range, RolledValue(..), RowTextComponent(..))
+import Dice exposing (Expr(..), FormulaTerm(..), InputPlaceholderModifier(..), Range, RolledValue(..), RowTextComponent(..))
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, intRange, tuple)
 import Parse
@@ -100,6 +100,7 @@ expectParsedRowTextResult =
     expectParseResult Parse.rowText
 
 
+expectParsedInputPlaceholderResult : RowTextComponent -> String -> Expectation
 expectParsedInputPlaceholderResult =
     expectParseResult Parse.inputPlaceholder
 
@@ -210,19 +211,52 @@ suite =
                         "abc [[@foo:2d6]] def"
                 )
             , test
+                "parses comma separated components and rollable text"
+                (\_ ->
+                    expectParsedRowTextResult
+                        [ PlainText "abc, "
+                        , RollableText { var = "foo", expression = diceExpr 2 6, value = UnrolledValue }
+                        , PlainText ", "
+                        , InputPlaceholder "Def" []
+                        , PlainText ", "
+                        , InputPlaceholder "Ghi" []
+                        ]
+                        "abc, [[@foo:2d6]], [Def], [Ghi]"
+                )
+            , test
                 "parses only input placeholder"
                 (\_ ->
                     expectParsedRowTextResult
-                        [ InputPlaceholder "FirstName" {}
+                        [ InputPlaceholder "OnlyName" []
                         ]
-                        "[FirstName]"
+                        "[OnlyName]"
                 )
             , test "parses input placeholder"
                 (\_ ->
                     expectParsedInputPlaceholderResult
-                        (InputPlaceholder "FirstName" {})
-                        "[FirstName:feq2490@#]"
+                        (InputPlaceholder "ModifiedName" [ InputPlaceholderUnknown "feq" "ab" ])
+                        "[ModifiedName:feq=ab]"
                 )
-            , todo "parses percents"
+            , test "parses input placeholder with nested []s"
+                (\_ ->
+                    expectParsedRowTextResult
+                        [ InputPlaceholder "IndexedName" [ InputPlaceholderUnknown "b" "a", InputPlaceholderIndex 2 ] ]
+                        "[IndexedName:b=a:[2]]"
+                )
+            , test "parses input placeholder with alphanumeric variable"
+                (\_ ->
+                    expectParsedInputPlaceholderResult
+                        (InputPlaceholder "Verb1" [])
+                        "[Verb1]"
+                )
+            , test "parses multiple input placeholders"
+                (\_ ->
+                    expectParsedRowTextResult
+                        [ InputPlaceholder "Noun1" []
+                        , PlainText " "
+                        , InputPlaceholder "Verb1" []
+                        ]
+                        "[Noun1] [Verb1]"
+                )
             ]
         ]

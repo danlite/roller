@@ -1,4 +1,5 @@
 - TESTS
+- use input placeholder modifiers (i.e. text styling)
 - store table variables in bundle context
 - simpler nested results state?
 - "pass-through" tables?

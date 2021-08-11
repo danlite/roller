@@ -1,7 +1,7 @@
 module Parse exposing (..)
 
 import Char exposing (isDigit)
-import Dice exposing (Expr(..), FormulaTerm(..), InputPlaceholderModifiers, Range, RollableValue, RolledValue(..), RowTextComponent(..), makeRange, makeSingleRange)
+import Dice exposing (Expr(..), FormulaTerm(..), InputPlaceholderModifier(..), Range, RolledValue(..), RowTextComponent(..), makeRange, makeSingleRange)
 import Parser exposing (..)
 import Set
 import String exposing (toInt)
@@ -242,15 +242,46 @@ inputPlaceholder =
         |= inputPlaceholderModifiers
 
 
-inputPlaceholderModifiers : Parser InputPlaceholderModifiers
+inputPlaceholderModifiers : Parser (List InputPlaceholderModifier)
 inputPlaceholderModifiers =
     oneOf
-        [ succeed {}
+        [ ipModifiers
+        , succeed []
+        ]
+
+
+ipVariable : Parser String
+ipVariable =
+    variable { start = Char.isAlpha, inner = Char.isAlpha, reserved = Set.empty }
+
+
+ipModifier : Parser InputPlaceholderModifier
+ipModifier =
+    oneOf
+        [ succeed InputPlaceholderIndex
+            |. symbol ":["
+            |= int
             |. symbol "]"
-        , succeed {}
+        , succeed InputPlaceholderUnknown
             |. symbol ":"
-            |. chompUntil "]"
-            |. symbol "]"
+            |= ipVariable
+            |. symbol "="
+            |= ipVariable
+        ]
+
+
+ipModifiers : Parser (List InputPlaceholderModifier)
+ipModifiers =
+    loop [] ipModifiersHelp
+
+
+ipModifiersHelp : List InputPlaceholderModifier -> Parser (Step (List InputPlaceholderModifier) (List InputPlaceholderModifier))
+ipModifiersHelp modifiers =
+    oneOf
+        [ symbol "]"
+            |> map (\_ -> Done (List.reverse modifiers))
+        , succeed (\modifier -> Loop (modifier :: modifiers))
+            |= ipModifier
         ]
 
 

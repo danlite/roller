@@ -1,7 +1,6 @@
 module UI exposing (..)
 
 import Dice exposing (RolledValue(..), RowTextComponent(..))
-import Dict exposing (Dict)
 import Element exposing (..)
 import Element.Border as Border
 import Element.Font as Font
@@ -19,8 +18,9 @@ import Rollable
         , TableRollResult(..)
         , WithBundle
         , WithTableResult
+        , indexForInputPlaceholder
         , pathString
-        , rolledRefAsText
+        , rolledInputTextForKeyAtIndex
         )
 import String exposing (fromInt)
 import UI.Search exposing (expressionString, search)
@@ -57,14 +57,17 @@ indexPath =
         >> List.singleton
 
 
+bordered : List (Attribute msg)
 bordered =
     [ Border.solid, Border.color (rgb 0 0 0), Border.width 1 ]
 
 
+fullWidthColumn : List (Attribute msg) -> List (Element msg) -> Element msg
 fullWidthColumn a =
     column (width fill :: a)
 
 
+children : List (Element msg) -> Element msg
 children els =
     case els of
         [] ->
@@ -74,6 +77,7 @@ children els =
             fullWidthColumn [ paddingEach { top = 0, left = 40, right = 0, bottom = 0 }, spacing -1 ] els
 
 
+title : String -> Element msg -> Element msg
 title t btn =
     row [ width fill, padding 10 ] <| [ text t, btn ]
 
@@ -113,8 +117,8 @@ rolledText inputs =
                 PlainText pt ->
                     text pt
 
-                InputPlaceholder key _ ->
-                    Maybe.withDefault ("?" ++ key ++ "?") (Dict.get key inputs |> Maybe.map rolledRefAsText) |> text
+                InputPlaceholder key mods ->
+                    Maybe.withDefault ("?" ++ key ++ "?") (rolledInputTextForKeyAtIndex key (indexForInputPlaceholder mods) inputs) |> text
 
                 RollableText rv ->
                     parentheses
@@ -243,6 +247,7 @@ ref ip rr =
             fullWidthColumn (bordered ++ indexPath ip) [ (pathString r.path |> title) <| rollButton ip ]
 
 
+app : List (Element msg) -> Element msg
 app =
     column [ height fill, width fill ]
 

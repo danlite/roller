@@ -21,11 +21,6 @@ type alias FindResult a =
     Result FindErr a
 
 
-fail : FindErr -> Finder a
-fail err =
-    Finder (\_ -> Err err)
-
-
 findTable : String -> Finder Rollable
 findTable path =
     Finder (\reg -> fromMaybe (NotFound path) (Dict.get path reg))

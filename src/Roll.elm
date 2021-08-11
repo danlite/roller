@@ -12,7 +12,6 @@ import Rollable
     exposing
         ( Bundle
         , EvaluatedRow
-        , Inputs
         , Registry
         , RollInstructions
         , RollableRef(..)
@@ -24,7 +23,6 @@ import Rollable
         , findTableSource
         , pathString
         , rollResultForRollOnTable
-        , rolledInputsAsText
         , updateBundle
         )
 

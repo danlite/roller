@@ -1,6 +1,6 @@
 module Rollable exposing (..)
 
-import Dice exposing (Expr, FormulaTerm(..), Range, RowTextComponent(..), rangeIncludes)
+import Dice exposing (Expr, FormulaTerm(..), InputPlaceholderModifier(..), Range, RowTextComponent(..), rangeIncludes)
 import Dict exposing (Dict)
 import List.Extra exposing (getAt, setAt, updateAt)
 import Maybe exposing (withDefault)
@@ -124,33 +124,53 @@ type alias Inputs =
     Dict String RollableRef
 
 
-rolledInputsAsText : Inputs -> Dict String String
+rolledInputTextForKeyAtIndex : String -> Int -> Inputs -> Maybe String
+rolledInputTextForKeyAtIndex key index inputs =
+    Dict.get key (rolledInputsAsText inputs)
+        |> Maybe.andThen (List.Extra.getAt index)
+
+
+rolledInputsAsText : Inputs -> Dict String (List String)
 rolledInputsAsText =
-    Dict.map (\_ v -> rolledRefAsText v)
+    Dict.map (\_ v -> rolledRefsAsText v)
 
 
-rolledRefAsText : RollableRef -> String
-rolledRefAsText ref =
+rolledRefsAsText : RollableRef -> List String
+rolledRefsAsText ref =
     case ref of
         RolledTable table ->
-            case List.head table.result of
-                Just res ->
+            List.map
+                (\res ->
                     case res of
                         RolledRow row ->
-                            plainRowText row.result.text
+                            plainRowText row.inputs row.result.text
 
                         _ ->
                             "[???]"
-
-                _ ->
-                    "[???]"
+                )
+            <|
+                table.result
 
         _ ->
-            "[???]"
+            []
 
 
-plainRowText : List RowTextComponent -> String
-plainRowText =
+indexForInputPlaceholder : List InputPlaceholderModifier -> Int
+indexForInputPlaceholder =
+    List.Extra.findMap
+        (\m ->
+            case m of
+                InputPlaceholderIndex i ->
+                    Just i
+
+                _ ->
+                    Nothing
+        )
+        >> withDefault 0
+
+
+plainRowText : Inputs -> List RowTextComponent -> String
+plainRowText inputs =
     List.map
         (\rtc ->
             case rtc of
@@ -160,8 +180,9 @@ plainRowText =
                 RollableText t ->
                     t.var
 
-                InputPlaceholder t _ ->
-                    t
+                InputPlaceholder t mods ->
+                    rolledInputTextForKeyAtIndex t (indexForInputPlaceholder mods) inputs
+                        |> Maybe.withDefault ("?" ++ t ++ "?")
         )
         >> String.join ""
 

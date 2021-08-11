@@ -6,7 +6,7 @@ import Http
 import KeyPress exposing (KeyValue)
 import List exposing (map)
 import List.Extra
-import Loader exposing (RollableLoadResult, loadTable)
+import Loader exposing (RollableLoadResult, getDirectory, loadTable)
 import Maybe exposing (withDefault)
 import Random
 import Roll exposing (rerollSingleTableRow, rollOnRef)
@@ -101,6 +101,7 @@ type Msg
     | Roll Roll
     | DidRoll IndexPath RollableRef
     | RollNew RollableRef
+    | RequestDirectory String
     | GotDirectory (Result Http.Error (List String))
     | LoadTable String
     | LoadedTable String RollableLoadResult
@@ -191,6 +192,9 @@ update msg model =
 
         RollNew ref ->
             ( { model | results = model.results ++ [ ref ] }, jumpToBottom NoOp )
+
+        RequestDirectory filterString ->
+            ( model, getDirectory filterString GotDirectory )
 
         GotDirectory result ->
             case result of
