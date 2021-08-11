@@ -173,10 +173,17 @@ attributesForInputPlaceholder mods =
                 )
                 mods
                 |> Maybe.andThen brightColorFromString
-                |> Maybe.map (\c -> [ Border.glow c 1, Background.color c ])
-                -- |> Maybe.map Background.color
-                -- |> Maybe.map (\c -> Font.glow c 1)
-                -- |> Maybe.map List.singleton
+                |> Maybe.map
+                    (\c ->
+                        [ Border.shadow
+                            { offset = ( 0, 0 )
+                            , blur = 0
+                            , size = 1
+                            , color = c
+                            }
+                        , Background.color c
+                        ]
+                    )
                 |> Maybe.withDefault []
     in
     color ++ bgColor
