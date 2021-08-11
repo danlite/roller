@@ -18,6 +18,7 @@ type FormulaTerm
 
 type Expr
     = Term FormulaTerm
+    | Mul Expr Expr
     | Add Expr Expr
     | Sub Expr Expr
 

@@ -1,6 +1,7 @@
 module UI exposing (..)
 
 import Dice exposing (InputPlaceholderModifier(..), RolledValue(..), RowTextComponent(..))
+import Dict
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -21,6 +22,7 @@ import Rollable
         , WithTableResult
         , indexForInputPlaceholder
         , pathString
+        , plainRowText
         , rolledInputTextForKeyAtIndex
         )
 import String exposing (fromInt)
@@ -101,12 +103,21 @@ bundle ip b =
         ]
 
 
+tableExtraText : RolledTable -> Element Msg
+tableExtraText t =
+    t.extra
+        |> Maybe.map (row [ width fill, padding 10 ] << rolledText Dict.empty)
+        |> Maybe.withDefault none
+
+
 table : IndexPath -> RolledTable -> Element Msg
 table ip t =
     fullWidthColumn (indexPath ip ++ [ spacing -1 ]) <|
         tableRollResults
             ip
-            (title t.title (rollButton ip))
+            [ title t.title (rollButton ip)
+            , tableExtraText t
+            ]
             t.result
 
 
@@ -196,7 +207,7 @@ textForInputPlaceholder mods initialText =
             List.Extra.findMap
                 (\m ->
                     case m of
-                        InputPlaceholderTextTransform t ->
+                        InputPlaceholderTextTransform _ ->
                             Just String.toLower
 
                         _ ->
@@ -208,7 +219,7 @@ textForInputPlaceholder mods initialText =
         transforms =
             [ lowercase ]
     in
-    List.foldl (\fn t -> fn t) initialText transforms |> text
+    List.foldl (<|) initialText transforms |> text
 
 
 rolledText : Inputs -> List RowTextComponent -> List (Element Msg)
@@ -289,8 +300,8 @@ splitTableRollResults res =
             ( res, [], [] )
 
 
-tableRollResultsHelp : Int -> Int -> IndexPath -> Element Msg -> List TableRollResult -> List (Element Msg)
-tableRollResultsHelp riOffset ipOffset ip titleEl res =
+tableRollResultsHelp : Int -> Int -> IndexPath -> List (Element Msg) -> List TableRollResult -> List (Element Msg)
+tableRollResultsHelp riOffset ipOffset ip headerEls res =
     let
         ( firstGroup, firstRefs, secondGroup ) =
             splitTableRollResults res
@@ -301,14 +312,14 @@ tableRollResultsHelp riOffset ipOffset ip titleEl res =
 
         _ ->
             (fullWidthColumn bordered <|
-                titleEl
-                    :: List.indexedMap (\ri r -> tableRollResult ip (ri + riOffset) r) firstGroup
+                headerEls
+                    ++ List.indexedMap (\ri r -> tableRollResult ip (ri + riOffset) r) firstGroup
             )
                 :: (mapChildIndexesWithOffset ipOffset ip ref firstRefs |> children)
-                :: tableRollResultsHelp (riOffset + List.length firstGroup) (List.length firstRefs) ip none secondGroup
+                :: tableRollResultsHelp (riOffset + List.length firstGroup) (List.length firstRefs) ip [] secondGroup
 
 
-tableRollResults : IndexPath -> Element Msg -> List TableRollResult -> List (Element Msg)
+tableRollResults : IndexPath -> List (Element Msg) -> List TableRollResult -> List (Element Msg)
 tableRollResults =
     tableRollResultsHelp 0 0
 

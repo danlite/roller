@@ -73,7 +73,7 @@ type alias WithBundle a =
 
 
 type alias WithTableResult a =
-    { a | result : List TableRollResult, title : String }
+    { a | result : List TableRollResult, title : String, extra : Maybe (List RowTextComponent) }
 
 
 type RollableRef
@@ -103,6 +103,7 @@ type alias TableSource =
     , path : String
     , title : String
     , dice : Expr
+    , extra : Maybe String
     }
 
 

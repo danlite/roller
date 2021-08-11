@@ -154,6 +154,13 @@ suite =
                             (Add (diceExpr count sides) (constantTerm num))
                             (diceString count sides ++ "+" ++ fromInt num)
                     )
+                , fuzz (tuple ( fuzzyDice, nonNegativeInt ))
+                    "multidie with multiplier"
+                    (\( ( count, sides ), num ) ->
+                        expectParsedExpressionResult
+                            (Mul (diceExpr count sides) (constantTerm num))
+                            (diceString count sides ++ "*" ++ fromInt num)
+                    )
                 ]
             ]
         , describe "rows"

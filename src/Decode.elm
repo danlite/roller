@@ -5,6 +5,7 @@ import Dice
         ( Expr(..)
         , FormulaTerm(..)
         , Range
+        , RowTextComponent
         , makeSingleRange
         , rangeMembers
         )
@@ -12,7 +13,7 @@ import Dict exposing (Dict)
 import Parse exposing (ParsedRow(..), row)
 import Parser
 import Rollable exposing (RollInstructions, Rollable(..), RollableRef(..), RollableRefData, Row, UnresolvedRollableRefData, Variable(..), resolvePathInContext)
-import Yaml.Decode exposing (Decoder, andMap, andThen, bool, dict, fail, field, list, map, map2, map4, maybe, oneOf, string, succeed)
+import Yaml.Decode exposing (..)
 
 
 listWrapDecoder : Decoder v -> Decoder (List v)
@@ -26,7 +27,7 @@ listWrapDecoder inner =
 variableDecoder : Decoder Variable
 variableDecoder =
     oneOf
-        [ map ConstValue Yaml.Decode.int
+        [ map ConstValue int
         , map ContextKey string
         ]
 
@@ -141,6 +142,7 @@ type alias YamlTableFields =
     , dice : Maybe Expr
     , rows : List YamlRow
     , inputs : Dict String UnresolvedRollableRefData
+    , extraResults : Maybe String
     }
 
 
@@ -175,7 +177,7 @@ diceFromRowList rows =
 
 tableDecoder : Decoder YamlFile
 tableDecoder =
-    map4
+    map5
         YamlTableFields
         (field "title" string)
         (maybe (field "dice" string)
@@ -209,6 +211,7 @@ tableDecoder =
                             succeed dict
                 )
         )
+        (maybe (field "extraResults" string))
         |> map YamlTable
 
 
@@ -295,6 +298,7 @@ finalize path yamlFile =
 
                         _ ->
                             diceFromRowList rows
+                , extra = table.extraResults
                 }
 
         YamlBundle bundle ->

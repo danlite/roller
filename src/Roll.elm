@@ -5,6 +5,8 @@ import Dict exposing (Dict)
 import List exposing (sum)
 import List.Extra
 import Maybe exposing (withDefault)
+import Parse
+import Parser
 import Random exposing (..)
 import Random.Extra exposing (sequence)
 import RollContext exposing (Context, addToContextFromRef, addToContextFromResult, addToContextFromResults, depth, increaseDepth)
@@ -25,6 +27,10 @@ import Rollable
         , rollResultForRollOnTable
         , updateBundle
         )
+
+
+type alias BundleContext =
+    Dict String Int
 
 
 evaluateVariable : Context -> Variable -> Int
@@ -62,22 +68,31 @@ siblingResultNumbers res =
             [ err.rollTotal ]
 
 
+rollTableExtra : TableSource -> Generator (Maybe (List RowTextComponent))
+rollTableExtra table =
+    table.extra
+        |> Maybe.map
+            (\extra ->
+                Result.withDefault
+                    [ PlainText extra ]
+                    (Parser.run Parse.rowText extra)
+                    |> rollTextComponents
+                    |> map Just
+            )
+        |> (Maybe.withDefault <| constant <| Nothing)
+
+
 rollOnTable : Registry -> TableSource -> Context -> RollInstructions -> Generator (List TableRollResult)
 rollOnTable registry source context instructions =
     let
         rollCount =
             evaluateVariable context (withDefault (ConstValue 1) instructions.rollCount)
-
-        doRoll =
-            rollSingleRowOnTable registry context source
     in
-    doRoll instructions
+    rollSingleRowOnTable registry context source instructions
         |> andThen
             (\r ->
                 if rollCount == 1 then
-                    constant r
-                        |> List.singleton
-                        |> sequence
+                    constant r |> map List.singleton
 
                 else
                     let
@@ -152,9 +167,14 @@ evaluateRollResult result =
 
 evaluateRowText : EvaluatedRow -> Generator EvaluatedRow
 evaluateRowText row =
-    List.map rollText row.text
-        |> sequence
+    rollTextComponents row.text
         |> map (\t -> { row | text = t })
+
+
+rollTextComponents : List RowTextComponent -> Generator (List RowTextComponent)
+rollTextComponents =
+    List.map rollText
+        >> sequence
 
 
 rollText : RowTextComponent -> Generator RowTextComponent
@@ -175,10 +195,25 @@ rollValue v =
         |> map (\rollTotal -> { var = v.var, expression = v.expression, value = ValueResult rollTotal })
 
 
+rollOnBundleRefs : Registry -> Context -> List RollableRef -> Generator (List RollableRef)
+rollOnBundleRefs registry context refs =
+    case List.Extra.uncons refs of
+        Nothing ->
+            constant []
+
+        Just ( ref, otherRefs ) ->
+            rollOnRef registry context ref
+                |> andThen
+                    (\rolledRef ->
+                        map2 (::)
+                            (constant rolledRef)
+                            (rollOnBundleRefs registry context otherRefs)
+                    )
+
+
 rollOnBundle : Registry -> Context -> Bundle -> Generator Bundle
 rollOnBundle registry context bundle =
-    List.map (rollOnRef registry context) bundle.tables
-        |> sequence
+    rollOnBundleRefs registry context bundle.tables
         |> map (\refs -> { bundle | tables = refs })
 
 
@@ -227,16 +262,18 @@ rollOnRef registry context r =
         Ref ref ->
             case findTableSource registry ref.path of
                 Just table ->
-                    map
-                        (\res ->
+                    map2
+                        (\res extra ->
                             RolledTable
                                 { path = ref.path
                                 , instructions = ref.instructions
                                 , result = res
                                 , title = ref.instructions.title |> withDefault table.title
+                                , extra = extra
                                 }
                         )
                         (rollOnTable registry table newContext ref.instructions)
+                        (rollTableExtra table)
 
                 _ ->
                     case findBundleSource registry ref.path of
@@ -351,6 +388,9 @@ rollExpr expr =
         Term term ->
             map RolledTerm (rollFormulaTerm term)
 
+        Mul e1 e2 ->
+            map2 RolledMul (rollExpr e1) (rollExpr e2)
+
         Add e1 e2 ->
             map2 RolledAdd (rollExpr e1) (rollExpr e2)
 
@@ -416,6 +456,7 @@ rollMultiDie multiDie =
 
 type RolledExpr
     = RolledTerm RolledFormulaTerm
+    | RolledMul RolledExpr RolledExpr
     | RolledAdd RolledExpr RolledExpr
     | RolledSub RolledExpr RolledExpr
 
@@ -425,6 +466,9 @@ evaluateExpr expr =
     case expr of
         RolledTerm term ->
             valueOf term
+
+        RolledMul e1 e2 ->
+            evaluateExpr e1 * evaluateExpr e2
 
         RolledAdd e1 e2 ->
             evaluateExpr e1 + evaluateExpr e2

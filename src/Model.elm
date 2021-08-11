@@ -101,7 +101,7 @@ type Msg
     | Roll Roll
     | DidRoll IndexPath RollableRef
     | RollNew RollableRef
-    | RequestDirectory String
+    | RequestDirectory (List String)
     | GotDirectory (Result Http.Error (List String))
     | LoadTable String
     | LoadedTable String RollableLoadResult

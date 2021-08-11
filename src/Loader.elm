@@ -27,10 +27,10 @@ withoutLeadingSlash str =
         str
 
 
-getDirectory : String -> (Result Http.Error (List String) -> msg) -> Cmd msg
-getDirectory filterString message =
+getDirectory : List String -> (Result Http.Error (List String) -> msg) -> Cmd msg
+getDirectory filterStrings message =
     Http.get
-        { url = crossOrigin directoryServerUrlRoot [] [ Url.Builder.string "filter" filterString ]
+        { url = crossOrigin directoryServerUrlRoot [] ((List.map <| Url.Builder.string "filter") <| filterStrings)
         , expect = Http.expectJson message (J.field "directory" (J.list J.string))
         }
 

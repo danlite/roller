@@ -27,6 +27,7 @@ mockRolledTable path title result =
         , instructions = mockRollInstructions
         , result = result
         , title = title
+        , extra = Nothing
         }
 
 

@@ -1,6 +1,8 @@
 - TESTS
-- store table variables in bundle context
+- parse percents
 - reroll individual inputs
+- store table variables in bundle context
+  - support rollCount > 1 for bundles?
 - simpler nested results state?
 - "pass-through" tables?
   - e.g. for:

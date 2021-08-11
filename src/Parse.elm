@@ -71,6 +71,7 @@ expressionHelp revOps expr =
 type Operator
     = AddOp
     | SubOp
+    | MulOp
 
 
 operator : Parser Operator
@@ -78,6 +79,7 @@ operator =
     oneOf
         [ map (\_ -> AddOp) (symbol "+")
         , map (\_ -> SubOp) (symbol "-")
+        , map (\_ -> MulOp) (symbol "*")
         ]
 
 
@@ -94,8 +96,9 @@ finalize revOps finalExpr =
         [] ->
             finalExpr
 
-        -- ( expr, MulOp ) :: otherRevOps ->
-        --     finalize otherRevOps (Mul expr finalExpr)
+        ( expr, MulOp ) :: otherRevOps ->
+            finalize otherRevOps (Mul expr finalExpr)
+
         ( expr, AddOp ) :: otherRevOps ->
             Add (finalize otherRevOps expr) finalExpr
 

@@ -14,9 +14,9 @@ import Rollable exposing (Rollable(..))
 import String exposing (fromInt)
 
 
-loadButton : String -> String -> Element Msg
-loadButton label filter =
-    Input.button [] { onPress = Just (RequestDirectory filter), label = text label }
+loadButton : String -> List String -> Element Msg
+loadButton label filters =
+    Input.button [] { onPress = Just (RequestDirectory filters), label = text label }
 
 
 searchField : Model -> Element Msg
@@ -26,11 +26,12 @@ searchField model =
             case model.registry of
                 TableDirectoryLoading ->
                     row [ width fill, spaceEvenly ]
-                        [ loadButton "All" ""
-                        , loadButton "Lazy DM" "/lazy-dm"
-                        , loadButton "DW PW" "/perilous-wilds"
-                        , loadButton "XGtE" "/xgte"
-                        , loadButton "UNE" "/une"
+                        [ loadButton "All" []
+                        , loadButton "Lazy DM" [ "/lazy-dm" ]
+                        , loadButton "DW PW" [ "/perilous-wilds" ]
+                        , loadButton "XGtE" [ "/xgte" ]
+                        , loadButton "UNE" [ "/une" ]
+                        , loadButton "DMG" [ "/dmg", "/spells" ]
 
                         -- , loadButton "" ""
                         ]
@@ -146,6 +147,9 @@ expressionString expr =
 
         Sub e1 e2 ->
             String.join "-" [ expressionString e1, expressionString e2 ]
+
+        Mul e1 e2 ->
+            String.join "*" [ expressionString e1, expressionString e2 ]
 
 
 rollButtonTextForRollable : Rollable -> String
