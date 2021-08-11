@@ -34,7 +34,9 @@ type RolledValue
 
 type InputPlaceholderModifier
     = InputPlaceholderIndex Int
-    | InputPlaceholderUnknown String String
+    | InputPlaceholderColor String
+    | InputPlaceholderBackgroundColor String
+    | InputPlaceholderTextTransform String
 
 
 type RowTextComponent

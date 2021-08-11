@@ -239,19 +239,11 @@ inputPlaceholder =
     succeed InputPlaceholder
         |. symbol "["
         |= variable { start = Char.isAlpha, inner = \c -> Char.isAlphaNum c || (c == '-'), reserved = Set.empty }
-        |= inputPlaceholderModifiers
+        |= ipModifiers
 
 
-inputPlaceholderModifiers : Parser (List InputPlaceholderModifier)
-inputPlaceholderModifiers =
-    oneOf
-        [ ipModifiers
-        , succeed []
-        ]
-
-
-ipVariable : Parser String
-ipVariable =
+ipVariableValue : Parser String
+ipVariableValue =
     variable { start = Char.isAlpha, inner = Char.isAlpha, reserved = Set.empty }
 
 
@@ -262,12 +254,22 @@ ipModifier =
             |. symbol ":["
             |= int
             |. symbol "]"
-        , succeed InputPlaceholderUnknown
+        , succeed identity
             |. symbol ":"
-            |= ipVariable
-            |. symbol "="
-            |= ipVariable
+            |= oneOf
+                [ ipVariablePair InputPlaceholderColor (keyword "c") ipVariableValue
+                , ipVariablePair InputPlaceholderBackgroundColor (keyword "cbg") ipVariableValue
+                , ipVariablePair InputPlaceholderTextTransform (keyword "t") ipVariableValue
+                ]
         ]
+
+
+ipVariablePair : (String -> InputPlaceholderModifier) -> Parser () -> Parser String -> Parser InputPlaceholderModifier
+ipVariablePair mod varName varValue =
+    succeed mod
+        |. varName
+        |. symbol "="
+        |= varValue
 
 
 ipModifiers : Parser (List InputPlaceholderModifier)

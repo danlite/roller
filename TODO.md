@@ -1,6 +1,6 @@
 - TESTS
-- use input placeholder modifiers (i.e. text styling)
 - store table variables in bundle context
+- reroll individual inputs
 - simpler nested results state?
 - "pass-through" tables?
   - e.g. for:

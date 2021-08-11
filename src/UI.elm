@@ -1,7 +1,8 @@
 module UI exposing (..)
 
-import Dice exposing (RolledValue(..), RowTextComponent(..))
+import Dice exposing (InputPlaceholderModifier(..), RolledValue(..), RowTextComponent(..))
 import Element exposing (..)
+import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
@@ -109,6 +110,100 @@ table ip t =
             t.result
 
 
+colorFromString : String -> Maybe Color
+colorFromString =
+    colorFromStringWithIntensity 150
+
+
+brightColorFromString : String -> Maybe Color
+brightColorFromString =
+    colorFromStringWithIntensity 255
+
+
+colorFromStringWithIntensity : Int -> String -> Maybe Color
+colorFromStringWithIntensity v s =
+    case s of
+        "green" ->
+            Just <| rgb255 0 v 0
+
+        "yellow" ->
+            Just <| rgb255 v v 0
+
+        "cyan" ->
+            Just <| rgb255 0 v v
+
+        "magenta" ->
+            Just <| rgb255 v 0 v
+
+        _ ->
+            Nothing
+
+
+attributesForInputPlaceholder : List InputPlaceholderModifier -> List (Attribute Msg)
+attributesForInputPlaceholder mods =
+    let
+        color : List (Attribute Msg)
+        color =
+            List.Extra.findMap
+                (\m ->
+                    case m of
+                        InputPlaceholderColor c ->
+                            Just c
+
+                        _ ->
+                            Nothing
+                )
+                mods
+                |> Maybe.andThen colorFromString
+                |> Maybe.map Font.color
+                |> Maybe.map List.singleton
+                |> Maybe.withDefault []
+
+        -- TODO: Refactor
+        bgColor : List (Attribute Msg)
+        bgColor =
+            List.Extra.findMap
+                (\m ->
+                    case m of
+                        InputPlaceholderBackgroundColor c ->
+                            Just c
+
+                        _ ->
+                            Nothing
+                )
+                mods
+                |> Maybe.andThen brightColorFromString
+                |> Maybe.map (\c -> [ Border.glow c 1, Background.color c ])
+                -- |> Maybe.map Background.color
+                -- |> Maybe.map (\c -> Font.glow c 1)
+                -- |> Maybe.map List.singleton
+                |> Maybe.withDefault []
+    in
+    color ++ bgColor
+
+
+textForInputPlaceholder : List InputPlaceholderModifier -> String -> Element Msg
+textForInputPlaceholder mods initialText =
+    let
+        lowercase =
+            List.Extra.findMap
+                (\m ->
+                    case m of
+                        InputPlaceholderTextTransform t ->
+                            Just String.toLower
+
+                        _ ->
+                            Nothing
+                )
+                mods
+                |> Maybe.withDefault identity
+
+        transforms =
+            [ lowercase ]
+    in
+    List.foldl (\fn t -> fn t) initialText transforms |> text
+
+
 rolledText : Inputs -> List RowTextComponent -> List (Element Msg)
 rolledText inputs =
     List.map
@@ -118,7 +213,9 @@ rolledText inputs =
                     text pt
 
                 InputPlaceholder key mods ->
-                    Maybe.withDefault ("?" ++ key ++ "?") (rolledInputTextForKeyAtIndex key (indexForInputPlaceholder mods) inputs) |> text
+                    Maybe.withDefault ("?" ++ key ++ "?") (rolledInputTextForKeyAtIndex key (indexForInputPlaceholder mods) inputs)
+                        |> textForInputPlaceholder mods
+                        |> el (attributesForInputPlaceholder mods)
 
                 RollableText rv ->
                     parentheses

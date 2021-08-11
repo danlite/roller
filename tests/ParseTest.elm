@@ -234,14 +234,14 @@ suite =
             , test "parses input placeholder"
                 (\_ ->
                     expectParsedInputPlaceholderResult
-                        (InputPlaceholder "ModifiedName" [ InputPlaceholderUnknown "feq" "ab" ])
-                        "[ModifiedName:feq=ab]"
+                        (InputPlaceholder "ModifiedName" [ InputPlaceholderColor "ab" ])
+                        "[ModifiedName:c=ab]"
                 )
             , test "parses input placeholder with nested []s"
                 (\_ ->
                     expectParsedRowTextResult
-                        [ InputPlaceholder "IndexedName" [ InputPlaceholderUnknown "b" "a", InputPlaceholderIndex 2 ] ]
-                        "[IndexedName:b=a:[2]]"
+                        [ InputPlaceholder "IndexedName" [ InputPlaceholderColor "a", InputPlaceholderIndex 2 ] ]
+                        "[IndexedName:c=a:[2]]"
                 )
             , test "parses input placeholder with alphanumeric variable"
                 (\_ ->
