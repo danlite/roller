@@ -21,14 +21,20 @@
             "elm-community/random-extra": "3.2.0",
             "elm-community/result-extra": "2.4.0",
             "jinjor/elm-debounce": "3.0.0",
+            "lattyware/elm-fontawesome": "5.0.0",
+            "mdgriffith/elm-animator": "1.1.1",
+            "mdgriffith/elm-style-animation": "4.0.0",
             "mdgriffith/elm-ui": "1.1.8",
             "tripokey/elm-fuzzy": "5.2.1"
         },
         "indirect": {
+            "avh4/elm-color": "1.0.0",
             "elm/bytes": "1.0.8",
             "elm/file": "1.0.5",
+            "elm/svg": "1.0.1",
             "elm/time": "1.0.0",
-            "elm/virtual-dom": "1.0.2"
+            "elm/virtual-dom": "1.0.2",
+            "ianmackenzie/elm-units": "2.9.0"
         }
     },
     "test-dependencies": {
