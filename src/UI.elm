@@ -60,9 +60,28 @@ indexPath =
         >> List.singleton
 
 
+above : IndexPath -> Attribute msg
+above ip =
+    htmlAttribute <| Html.Attributes.style "z-index" <| fromInt (100 - List.length ip)
+
+
 bordered : List (Attribute msg)
 bordered =
-    [ Border.solid, Border.color (rgb 0 0 0), Border.width 1 ]
+    [ Border.solid
+    , Border.color (rgb 0 0 0)
+    , Border.width 1
+    , Border.shadow { offset = ( 0, 1 ), size = 0, blur = 2, color = rgba 0 0 0 0.5 }
+    ]
+
+
+depthColor : IndexPath -> Attribute msg
+depthColor ip =
+    let
+        value =
+            1.0 - (0.04 * toFloat (List.length ip - 1))
+    in
+    Background.color <|
+        rgb value value value
 
 
 fullWidthColumn : List (Attribute msg) -> List (Element msg) -> Element msg
@@ -98,7 +117,7 @@ rollRowButton ip ri =
 bundle : IndexPath -> BundleRef -> Element Msg
 bundle ip b =
     fullWidthColumn (indexPath ip ++ [ spacing -1 ])
-        [ title b.bundle.title (rollButton ip) |> el (width fill :: bordered)
+        [ title b.bundle.title (rollButton ip) |> el ([ width fill, above ip, depthColor ip ] ++ bordered)
         , children <| mapChildIndexes ip ref b.bundle.tables
         ]
 
@@ -305,13 +324,21 @@ tableRollResultsHelp riOffset ipOffset ip headerEls res =
     let
         ( firstGroup, firstRefs, secondGroup ) =
             splitTableRollResults res
+
+        firstGroupStyle =
+            (++) (depthColor ip :: bordered) <|
+                if List.length firstRefs > 0 then
+                    [ above ip ]
+
+                else
+                    []
     in
     case firstGroup of
         [] ->
             []
 
         _ ->
-            (fullWidthColumn bordered <|
+            (fullWidthColumn firstGroupStyle <|
                 headerEls
                     ++ List.indexedMap (\ri r -> tableRollResult ip (ri + riOffset) r) firstGroup
             )
