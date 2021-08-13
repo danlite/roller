@@ -1,6 +1,16 @@
 module Roll exposing (..)
 
-import Dice exposing (Die, Expr(..), FormulaTerm(..), RollableValue, RolledValue(..), RowTextComponent(..), rangeMembers)
+import Dice
+    exposing
+        ( Die
+        , Expr(..)
+        , FormulaTerm(..)
+        , RollableValue
+        , RolledPercent(..)
+        , RolledValue(..)
+        , RowTextComponent(..)
+        , rangeMembers
+        )
 import Dict exposing (Dict)
 import List exposing (sum)
 import List.Extra
@@ -175,6 +185,7 @@ rollTextComponents : List RowTextComponent -> Generator (List RowTextComponent)
 rollTextComponents =
     List.map rollText
         >> sequence
+        >> andThen rollPercents
 
 
 rollText : RowTextComponent -> Generator RowTextComponent
@@ -184,8 +195,39 @@ rollText text =
             rollValue v
                 |> map RollableText
 
+        PercentText p ->
+            rollTextComponents p.text
+                |> map (\t -> PercentText { p | text = t })
+
         _ ->
             constant text
+
+
+rollPercents : List RowTextComponent -> Generator (List RowTextComponent)
+rollPercents rtcs =
+    let
+        markSelected : Int -> List RowTextComponent
+        markSelected target =
+            List.foldl
+                (\rtc ( total, newRtcs ) ->
+                    case rtc of
+                        PercentText p ->
+                            if total + p.percent > target then
+                                ( -999, PercentText { p | value = PercentResult True } :: newRtcs )
+
+                            else
+                                ( total + p.percent, PercentText { p | value = PercentResult False } :: newRtcs )
+
+                        _ ->
+                            ( total, rtc :: newRtcs )
+                )
+                ( 0, [] )
+                rtcs
+                |> Tuple.mapSecond List.reverse
+                |> Tuple.second
+    in
+    int 1 100
+        |> map markSelected
 
 
 rollValue : { a | var : String, expression : Expr } -> Generator RollableValue
@@ -316,7 +358,7 @@ mapDict d =
 mapTuple : ( Generator a, Generator b ) -> Generator ( a, b )
 mapTuple tuple =
     map2
-        (\a b -> ( a, b ))
+        Tuple.pair
         (Tuple.first tuple)
         (Tuple.second tuple)
 

@@ -1,8 +1,21 @@
 module Parse exposing (..)
 
 import Char exposing (isDigit)
-import Dice exposing (Expr(..), FormulaTerm(..), InputPlaceholderModifier(..), Range, RolledValue(..), RowTextComponent(..), makeRange, makeSingleRange)
+import Dice
+    exposing
+        ( Expr(..)
+        , FormulaTerm(..)
+        , InputPlaceholderModifier(..)
+        , Range
+        , RollablePercent
+        , RolledPercent(..)
+        , RolledValue(..)
+        , RowTextComponent(..)
+        , makeRange
+        , makeSingleRange
+        )
 import Parser exposing (..)
+import Random.Int exposing (negativeInt)
 import Set
 import String exposing (toInt)
 
@@ -14,8 +27,8 @@ type alias ParsedDice =
 
 
 type ParsedRow
-    = SimpleRow String
-    | RangedRow Range String
+    = SimpleRow (List RowTextComponent)
+    | RangedRow Range (List RowTextComponent)
 
 
 parsedDiceToExpr : ParsedDice -> Expr
@@ -36,6 +49,10 @@ formulaTerm =
             |= lazy (\_ -> expression)
             |. symbol ")"
         , diceWithCount 1
+        , succeed
+            (negate >> Constant >> Term)
+            |. symbol "-"
+            |= int
         , succeed identity
             |= int
             |> andThen constantOrDiceWithSides
@@ -196,7 +213,7 @@ rangedRowParser =
                 |> andThen rangeResultParser
            )
         |. symbol "|"
-        |= (getChompedString <| succeed identity |= Parser.chompUntilEndOr "\n")
+        |= rowText
 
 
 row : Parser ParsedRow
@@ -204,7 +221,7 @@ row =
     oneOf
         [ backtrackable rangedRowParser
         , succeed SimpleRow
-            |= (getChompedString <| succeed identity |= Parser.chompUntilEndOr "\n")
+            |= rowText
         ]
 
 
@@ -212,7 +229,7 @@ rollableVar : Parser String
 rollableVar =
     variable
         { start = Char.isAlpha
-        , inner = Char.isAlphaNum
+        , inner = \c -> Char.isAlphaNum c || c == '-'
         , reserved = Set.empty
         }
 
@@ -231,18 +248,32 @@ rollableValue =
 plainText : Parser RowTextComponent
 plainText =
     succeed PlainText
-        |= (getChompedString <|
-                succeed ()
-                    |. chompUntilEndOr "["
-           )
+        |= plainTextHelp
+
+
+plainTextHelp : Parser String
+plainTextHelp =
+    getChompedString <|
+        succeed ()
+            |. chompUntilEndOr "["
 
 
 inputPlaceholder : Parser RowTextComponent
 inputPlaceholder =
-    succeed InputPlaceholder
-        |. symbol "["
-        |= variable { start = Char.isAlpha, inner = \c -> Char.isAlphaNum c || (c == '-'), reserved = Set.empty }
-        |= ipModifiers
+    oneOf
+        [ backtrackable <|
+            succeed InputPlaceholder
+                |. symbol "["
+                |= variable { start = Char.isAlpha, inner = \c -> Char.isAlphaNum c || (c == '-'), reserved = Set.empty }
+                |= ipModifiers
+
+        -- We might be dealing with some plain text with brackets [like this],
+        -- in which case we can backtrack out of the InputPlaceholder and
+        -- parse the plain text, manually prepending the opening bracket
+        , succeed (\bracket rest -> PlainText (bracket ++ rest))
+            |= (chompIf ((==) '[') |> getChompedString)
+            |= plainTextHelp
+        ]
 
 
 ipVariableValue : Parser String
@@ -290,10 +321,43 @@ ipModifiersHelp modifiers =
         ]
 
 
+percentText : Parser RowTextComponent
+percentText =
+    succeed (\( text, value ) -> PercentText <| RollablePercent text value UnrolledPercent)
+        |. symbol "[["
+        |= (percentTextValue
+                |> mapChompedString
+                    (\s value ->
+                        case Parser.run rowText s of
+                            Ok rtcs ->
+                                ( rtcs, value )
+
+                            Err e ->
+                                ( [], value )
+                    )
+           )
+        |. symbol "]]"
+
+
+percentTextValue : Parser Int
+percentTextValue =
+    succeed identity
+        |. chompWhile (not << Char.isDigit)
+        |= oneOf
+            [ backtrackable <|
+                succeed identity
+                    |= int
+                    |. oneOf [ symbol "%", keyword " percent" ]
+            , backtrackable <| (int |> andThen (\_ -> percentTextValue))
+            ]
+        |. chompUntil "]]"
+
+
 rollableText : Parser RowTextComponent
 rollableText =
     oneOf
         [ rollableValue
+        , percentText
         , inputPlaceholder
         , plainText
         ]
@@ -301,13 +365,17 @@ rollableText =
 
 rowText : Parser (List RowTextComponent)
 rowText =
-    loop [] rowTextHelp
+    succeed identity
+        |. oneOf [ symbol ">- ", succeed () ]
+        |= loop
+            []
+            rowTextHelp
 
 
 rowTextHelp : List RowTextComponent -> Parser (Step (List RowTextComponent) (List RowTextComponent))
 rowTextHelp revParts =
     oneOf
-        [ end |> map (\_ -> Done (List.reverse revParts))
+        [ oneOf [ symbol "\n", end ] |> map (\_ -> Done (List.reverse revParts))
         , succeed (\part -> Loop (part :: revParts))
             |= rollableText
         ]

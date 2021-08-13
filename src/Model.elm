@@ -3,6 +3,7 @@ module Model exposing (..)
 import Debounce exposing (Debounce)
 import Dict
 import Http
+import IndexPath exposing (IndexPath)
 import KeyPress exposing (KeyValue)
 import List exposing (map)
 import List.Extra
@@ -11,7 +12,7 @@ import Maybe exposing (withDefault)
 import Random
 import Roll exposing (rerollSingleTableRow, rollOnRef)
 import RollContext exposing (Context, refAtIndex)
-import Rollable exposing (IndexPath, Registry, Rollable(..), RollableRef(..), replaceAtIndex, simpleRef)
+import Rollable exposing (Registry, Rollable(..), RollableRef(..), replaceAtIndex, simpleRef)
 import Scroll exposing (jumpToBottom)
 import Search exposing (fuzzySearch)
 import Task

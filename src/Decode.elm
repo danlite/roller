@@ -1,18 +1,27 @@
-module Decode exposing (..)
+module Decode exposing (decoder, finalize)
 
 import Dice
     exposing
         ( Expr(..)
         , FormulaTerm(..)
         , Range
-        , RowTextComponent
         , makeSingleRange
         , rangeMembers
         )
 import Dict exposing (Dict)
 import Parse exposing (ParsedRow(..), row)
 import Parser
-import Rollable exposing (RollInstructions, Rollable(..), RollableRef(..), RollableRefData, Row, UnresolvedRollableRefData, Variable(..), resolvePathInContext)
+import Rollable
+    exposing
+        ( RollInstructions
+        , Rollable(..)
+        , RollableRef(..)
+        , RollableRefData
+        , Row
+        , UnresolvedRollableRefData
+        , Variable(..)
+        , resolvePathInContext
+        )
 import Yaml.Decode exposing (..)
 
 
@@ -21,6 +30,7 @@ listWrapDecoder inner =
     oneOf
         [ list inner
         , map List.singleton inner
+        , fail "listWrap"
         ]
 
 
@@ -29,6 +39,7 @@ variableDecoder =
     oneOf
         [ map ConstValue int
         , map ContextKey string
+        , fail "variable"
         ]
 
 
@@ -63,6 +74,7 @@ rowIndexVariableDecoder =
         [ map RowIndexConstValue Yaml.Decode.int
         , map RowIndexRangeValue decodeRange
         , map RowIndexVariableValue string
+        , fail "rowIndexVariable"
         ]
 
 
@@ -121,12 +133,13 @@ rollInstructionsDecoder =
         |> andMap (maybe (field "rollCount" variableDecoder))
         |> andMap (maybe (field "total" variableDecoder))
         |> andMap (maybe (field "dice" exprDecoder))
-        |> andMap (oneOf [ field "unique" bool, succeed False ])
+        |> andMap (oneOf [ field "unique" bool, succeed False, fail "unique" ])
         |> andMap
             (oneOf
                 [ field "ignore" (listWrapDecoder rowIndexVariableDecoder)
                     |> map flattenRowIndexVariables
                 , succeed []
+                , fail "ignore"
                 ]
             )
         |> andMap (maybe (field "modifier" variableDecoder))
@@ -167,6 +180,7 @@ rowDecoder =
                 |> andThen parsedRowDecoder
             )
         , map MetaRow unresolvedTableRefDecoder
+        , fail "row"
         ]
 
 
@@ -226,7 +240,7 @@ bundleDecoder =
 
 decoder : Decoder YamlFile
 decoder =
-    oneOf [ tableDecoder, bundleDecoder ]
+    oneOf [ tableDecoder, bundleDecoder, fail "decoder" ]
 
 
 updateLastItem : (a -> a) -> List a -> List a

@@ -3,11 +3,11 @@ module RollContext exposing (..)
 import Dice exposing (RolledValue(..), RowTextComponent(..))
 import Dict exposing (Dict)
 import List.Extra
-import Rollable exposing (IndexPath, RollContext, RollableRef(..), TableRollResult(..), tableRollResultsRefs)
+import Rollable exposing (IndexPath, RollableRef(..), TableRollResult(..), tableRollResultsRefs)
 
 
 type alias Context =
-    ( Int, RollContext )
+    ( Int, Dict String Int )
 
 
 increaseDepth : Context -> Context

@@ -1,11 +1,9 @@
 module Rollable exposing (..)
 
-import Dice exposing (Expr, FormulaTerm(..), InputPlaceholderModifier(..), Range, RowTextComponent(..), rangeIncludes)
+import Dice exposing (Expr, FormulaTerm(..), InputPlaceholderModifier(..), Range, RollablePercent, RowTextComponent(..), rangeIncludes)
 import Dict exposing (Dict)
 import List.Extra exposing (getAt, setAt, updateAt)
 import Maybe exposing (withDefault)
-import Parse
-import Parser
 import Regex
 import Result exposing (fromMaybe)
 
@@ -26,7 +24,7 @@ type alias IndexPath =
 
 
 type alias Row =
-    { text : String, range : Range, refs : List RollableRef }
+    { text : List RowTextComponent, range : Range, refs : List RollableRef }
 
 
 type alias EvaluatedRow =
@@ -184,6 +182,9 @@ plainRowText inputs =
                 InputPlaceholder t mods ->
                     rolledInputTextForKeyAtIndex t (indexForInputPlaceholder mods) inputs
                         |> Maybe.withDefault ("?" ++ t ++ "?")
+
+                PercentText p ->
+                    plainRowText inputs p.text
         )
         >> String.join ""
 
@@ -348,20 +349,10 @@ rollResultForRollOnTable : List Row -> Inputs -> Int -> TableRollResult
 rollResultForRollOnTable rows inputs rollTotal =
     case List.Extra.find (\r -> rangeIncludes rollTotal r.range) rows of
         Just row ->
-            let
-                rowText =
-                    if String.startsWith ">- " row.text then
-                        String.dropLeft 3 row.text
-
-                    else
-                        row.text
-            in
             RolledRow
                 { result =
                     EvaluatedRow
-                        (Result.withDefault [ PlainText rowText ]
-                            (Parser.run Parse.rowText rowText)
-                        )
+                        row.text
                         row.refs
                 , rollTotal = rollTotal
                 , range = row.range
@@ -527,7 +518,7 @@ type Variable
     | ContextKey String
 
 
-type alias RollContext =
+type alias ContextVariables =
     Dict String Int
 
 
@@ -535,7 +526,7 @@ type alias ContextVariableResult =
     Result DiceError Int
 
 
-valueInContext : Variable -> RollContext -> ContextVariableResult
+valueInContext : Variable -> ContextVariables -> ContextVariableResult
 valueInContext var context =
     case var of
         ConstValue n ->
@@ -545,7 +536,7 @@ valueInContext var context =
             fromMaybe (MissingContextVariable k) (Dict.get k context)
 
 
-rollCount : Maybe Variable -> RollContext -> ContextVariableResult
+rollCount : Maybe Variable -> ContextVariables -> ContextVariableResult
 rollCount var context =
     withDefault
         (Ok 1)

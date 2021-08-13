@@ -1,6 +1,15 @@
 module ParseTest exposing (..)
 
-import Dice exposing (Expr(..), FormulaTerm(..), InputPlaceholderModifier(..), Range, RolledValue(..), RowTextComponent(..))
+import Dice
+    exposing
+        ( Expr(..)
+        , FormulaTerm(..)
+        , InputPlaceholderModifier(..)
+        , Range
+        , RolledPercent(..)
+        , RolledValue(..)
+        , RowTextComponent(..)
+        )
 import Expect exposing (Expectation)
 import Fuzz exposing (Fuzzer, intRange, tuple)
 import Parse
@@ -167,25 +176,36 @@ suite =
             [ test "parses ranged row"
                 (\_ ->
                     expectParsedRowResult
-                        (Parse.RangedRow (Range 1 2) "My text")
+                        (Parse.RangedRow (Range 1 2) [ PlainText "My text" ])
                         "1-2|My text"
                 )
             , test "parses single ranged row"
                 (\_ ->
                     expectParsedRowResult
-                        (Parse.RangedRow (Range 1 1) "My text")
+                        (Parse.RangedRow (Range 1 1) [ PlainText "My text" ])
                         "1|My text"
+                )
+            , test "parses ranged row beginning with rollable value"
+                (\_ ->
+                    expectParsedRowResult
+                        (Parse.RangedRow
+                            (Range 1 1)
+                            [ RollableText { expression = Term (MultiDie { count = 2, sides = 6 }), value = UnrolledValue, var = "a" }
+                            , PlainText " My text"
+                            ]
+                        )
+                        "1|[[@a:2d6]] My text"
                 )
             , test "parses simple row"
                 (\_ ->
                     expectParsedRowResult
-                        (Parse.SimpleRow "My text")
+                        (Parse.SimpleRow [ PlainText "My text" ])
                         "My text"
                 )
             , test "parses simple row that starts with a digit"
                 (\_ ->
                     expectParsedRowResult
-                        (Parse.SimpleRow "1 of my text")
+                        (Parse.SimpleRow [ PlainText "1 of my text" ])
                         "1 of my text"
                 )
             ]
@@ -201,6 +221,59 @@ suite =
                     expectParsedRowTextResult
                         [ RollableText { var = "foo", expression = diceExpr 2 6, value = UnrolledValue } ]
                         "[[@foo:2d6]]"
+                )
+            , test "fails gracefully if rollable value is malformed"
+                (\_ ->
+                    let
+                        malformed =
+                            "[[dmg:4d8]]"
+                    in
+                    case
+                        Parser.run Parse.rowText malformed
+                    of
+                        Err _ ->
+                            Expect.pass
+
+                        Ok _ ->
+                            Expect.fail (malformed ++ "should be considered malformed")
+                )
+            , test "parses percent with % sign"
+                (\_ ->
+                    expectParsedRowTextResult
+                        [ PlainText "Encounter either "
+                        , PercentText { percent = 40, text = [ PlainText "foos (40%)" ], value = UnrolledPercent }
+                        , PlainText " or "
+                        , PercentText { percent = 60, text = [ PlainText "bars (60%)" ], value = UnrolledPercent }
+                        ]
+                        "Encounter either [[foos (40%)]] or [[bars (60%)]]"
+                )
+            , test "parses percent with \"percent\" term"
+                (\_ ->
+                    expectParsedRowTextResult
+                        [ PlainText "Door "
+                        , PercentText { percent = 75, text = [ PlainText "75 percent chance of being trapped" ], value = UnrolledPercent }
+                        ]
+                        "Door [[75 percent chance of being trapped]]"
+                )
+            , test "parses percent with nested rollable text"
+                (\_ ->
+                    expectParsedRowTextResult
+                        [ PercentText
+                            { percent = 50
+                            , text = [ PlainText "one horse-sized duck (50%)" ]
+                            , value = UnrolledPercent
+                            }
+                        , PlainText " or "
+                        , PercentText
+                            { percent = 50
+                            , text =
+                                [ RollableText { var = "horses", expression = diceExpr 4 8, value = UnrolledValue }
+                                , PlainText " duck-sized horses (50%)"
+                                ]
+                            , value = UnrolledPercent
+                            }
+                        ]
+                        "[[one horse-sized duck (50%)]] or [[[[@horses:4d8]] duck-sized horses (50%)]]"
                 )
             , test
                 "parses plain text"

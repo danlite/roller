@@ -27,10 +27,19 @@ type alias RollableValue =
     { var : String, expression : Expr, value : RolledValue }
 
 
+type alias RollablePercent =
+    { text : List RowTextComponent, percent : Int, value : RolledPercent }
+
+
 type RolledValue
     = UnrolledValue
     | ErrorValue
     | ValueResult Int
+
+
+type RolledPercent
+    = UnrolledPercent
+    | PercentResult Bool
 
 
 type InputPlaceholderModifier
@@ -43,6 +52,7 @@ type InputPlaceholderModifier
 type RowTextComponent
     = PlainText String
     | RollableText RollableValue
+    | PercentText RollablePercent
     | InputPlaceholder String (List InputPlaceholderModifier)
 
 

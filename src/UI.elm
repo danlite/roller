@@ -1,6 +1,6 @@
 module UI exposing (..)
 
-import Dice exposing (InputPlaceholderModifier(..), RolledValue(..), RowTextComponent(..))
+import Dice exposing (InputPlaceholderModifier(..), RolledPercent(..), RolledValue(..), RowTextComponent(..))
 import Dict
 import Element exposing (..)
 import Element.Background as Background
@@ -9,12 +9,12 @@ import Element.Font as Font
 import Element.Input as Input
 import Html exposing (Html)
 import Html.Attributes
+import IndexPath exposing (IndexPath)
 import List.Extra
 import Model exposing (Model, Msg(..), Roll(..))
 import Rollable
     exposing
-        ( IndexPath
-        , Inputs
+        ( Inputs
         , RollableRef(..)
         , RollableRefData
         , TableRollResult(..)
@@ -96,7 +96,11 @@ children els =
             none
 
         _ ->
-            fullWidthColumn [ paddingEach { top = 0, left = 40, right = 0, bottom = 0 }, spacing -1 ] els
+            fullWidthColumn
+                [ paddingEach { top = 0, left = 40, right = 0, bottom = 0 }
+                , spacing -1
+                ]
+                els
 
 
 title : String -> Element msg -> Element msg
@@ -106,18 +110,25 @@ title t btn =
 
 rollButton : IndexPath -> Element Msg
 rollButton ip =
-    Input.button [ alignRight ] { onPress = Just (Roll (Reroll ip)), label = "roll " ++ (List.map fromInt ip |> String.join ".") |> text }
+    Input.button [ alignRight ]
+        { onPress = Just (Roll (Reroll ip))
+        , label = "roll " ++ IndexPath.toString ip |> text
+        }
 
 
 rollRowButton : IndexPath -> Int -> Element Msg
 rollRowButton ip ri =
-    Input.button [ alignRight ] { onPress = Just (Roll (RerollSingleRow ip ri)), label = "roll " ++ ((List.map fromInt ip |> String.join ".") ++ ":" ++ fromInt ri) |> text }
+    Input.button [ alignRight ]
+        { onPress = Just (Roll (RerollSingleRow ip ri))
+        , label = "roll " ++ (IndexPath.toString ip ++ "/" ++ fromInt ri) |> text
+        }
 
 
 bundle : IndexPath -> BundleRef -> Element Msg
 bundle ip b =
     fullWidthColumn (indexPath ip ++ [ spacing -1 ])
-        [ title b.bundle.title (rollButton ip) |> el ([ width fill, above ip, depthColor ip ] ++ bordered)
+        [ title b.bundle.title (rollButton ip)
+            |> el ([ width fill, above ip, depthColor ip ] ++ bordered)
         , children <| mapChildIndexes ip ref b.bundle.tables
         ]
 
@@ -250,7 +261,9 @@ rolledText inputs =
                     text pt
 
                 InputPlaceholder key mods ->
-                    Maybe.withDefault ("?" ++ key ++ "?") (rolledInputTextForKeyAtIndex key (indexForInputPlaceholder mods) inputs)
+                    Maybe.withDefault
+                        ("?" ++ key ++ "?")
+                        (rolledInputTextForKeyAtIndex key (indexForInputPlaceholder mods) inputs)
                         |> textForInputPlaceholder mods
                         |> el (attributesForInputPlaceholder mods)
 
@@ -266,7 +279,26 @@ rolledText inputs =
                             UnrolledValue ->
                                 expressionString rv.expression
                         )
-                        |> (\label -> Input.button [ Html.Attributes.title (expressionString rv.expression) |> htmlAttribute ] { onPress = Nothing, label = text label })
+                        |> (\label ->
+                                Input.button
+                                    [ Html.Attributes.title
+                                        (expressionString rv.expression)
+                                        |> htmlAttribute
+                                    ]
+                                    { onPress = Nothing, label = text label }
+                           )
+
+                PercentText p ->
+                    p.text
+                        |> rolledText inputs
+                        |> paragraph
+                            (case p.value of
+                                PercentResult True ->
+                                    [ Font.bold ]
+
+                                _ ->
+                                    [ Font.color <| rgb 0.85 0.85 0.85 ]
+                            )
         )
 
 
@@ -340,10 +372,23 @@ tableRollResultsHelp riOffset ipOffset ip headerEls res =
         _ ->
             (fullWidthColumn firstGroupStyle <|
                 headerEls
-                    ++ List.indexedMap (\ri r -> tableRollResult ip (ri + riOffset) r) firstGroup
+                    ++ List.indexedMap
+                        (\ri r -> tableRollResult ip (ri + riOffset) r)
+                        firstGroup
             )
-                :: (mapChildIndexesWithOffset ipOffset ip ref firstRefs |> children)
-                :: tableRollResultsHelp (riOffset + List.length firstGroup) (List.length firstRefs) ip [] secondGroup
+                :: (mapChildIndexesWithOffset
+                        ipOffset
+                        ip
+                        ref
+                        firstRefs
+                        |> children
+                   )
+                :: tableRollResultsHelp
+                    (riOffset + List.length firstGroup)
+                    (List.length firstRefs)
+                    ip
+                    []
+                    secondGroup
 
 
 tableRollResults : IndexPath -> List (Element Msg) -> List TableRollResult -> List (Element Msg)
@@ -386,7 +431,9 @@ ref ip rr =
             bundle ip b
 
         Ref r ->
-            fullWidthColumn (bordered ++ indexPath ip) [ (pathString r.path |> title) <| rollButton ip ]
+            fullWidthColumn
+                (bordered ++ indexPath ip)
+                [ (pathString r.path |> title) <| rollButton ip ]
 
 
 app : List (Element msg) -> Element msg
