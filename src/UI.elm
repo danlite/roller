@@ -297,7 +297,7 @@ rolledText inputs =
                                     [ Font.bold ]
 
                                 _ ->
-                                    [ Font.color <| rgb 0.85 0.85 0.85 ]
+                                    [ Font.color <| rgba 0 0 0 0.5 ]
                             )
         )
 
@@ -385,7 +385,7 @@ tableRollResultsHelp riOffset ipOffset ip headerEls res =
                    )
                 :: tableRollResultsHelp
                     (riOffset + List.length firstGroup)
-                    (List.length firstRefs)
+                    (ipOffset + List.length firstRefs)
                     ip
                     []
                     secondGroup

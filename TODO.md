@@ -1,5 +1,4 @@
 - TESTS
-- FIX rerolling individual rows (see: XGTE life events, 2+ events each with 2+ nested details)
 - reroll individual inputs
 - store table variables in bundle context
   - support rollCount > 1 for bundles?
