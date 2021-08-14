@@ -74,8 +74,28 @@ bordered =
     ]
 
 
+depthColorPalette : List Color
+depthColorPalette =
+    [ ( 250, 233, 220 )
+    , ( 252, 244, 224 )
+    , ( 222, 239, 235 )
+    , ( 221, 235, 247 )
+    , ( 233, 224, 246 )
+    , ( 247, 220, 235 )
+    , ( 252, 222, 224 )
+    ]
+        |> List.map (\( r, g, b ) -> rgb255 r g b)
+
+
 depthColor : IndexPath -> Attribute msg
 depthColor ip =
+    List.Extra.getAt ((modBy <| List.length depthColorPalette) <| List.length ip) depthColorPalette
+        |> Maybe.withDefault (rgb 1 1 1)
+        |> Background.color
+
+
+depthColorMonochrome : IndexPath -> Attribute msg
+depthColorMonochrome ip =
     let
         value =
             1.0 - (0.04 * toFloat (List.length ip - 1))
@@ -110,7 +130,7 @@ title t btn =
 
 rollButton : IndexPath -> Element Msg
 rollButton ip =
-    Input.button [ alignRight ]
+    Input.button [ alignRight, padding 5 ]
         { onPress = Just (Roll (Reroll ip))
         , label = Icons.rollMany
         }
@@ -118,7 +138,7 @@ rollButton ip =
 
 rollRowButton : IndexPath -> Int -> Element Msg
 rollRowButton ip ri =
-    Input.button [ alignRight ]
+    Input.button [ alignRight, padding 5 ]
         { onPress = Just (Roll (RerollSingleRow ip ri))
         , label = Icons.roll
         }
@@ -309,7 +329,29 @@ rolledText inputs =
 
 rollTotal : Int -> Element Msg
 rollTotal t =
-    el [ Font.center, width (px 100), alignTop ] <| text <| parentheses <| fromInt t
+    el
+        [ alignTop
+        , width (px 80)
+        ]
+    <|
+        el
+            [ Font.center
+            , Font.size 16
+            , width (px 30)
+            , height (px 30)
+            , centerX
+            , Background.color <| rgba 0 0 0 0.2
+            , Font.color <| rgb 1 1 1
+            , Border.rounded 4
+            ]
+        <|
+            el
+                [ centerX
+                , centerY
+                ]
+            <|
+                text <|
+                    fromInt t
 
 
 hasChildren : TableRollResult -> Bool
