@@ -9,6 +9,7 @@ import Element.Font as Font
 import Element.Input as Input
 import Html exposing (Html)
 import Html.Attributes
+import Icons
 import IndexPath exposing (IndexPath)
 import List.Extra
 import Model exposing (Model, Msg(..), Roll(..))
@@ -22,7 +23,6 @@ import Rollable
         , WithTableResult
         , indexForInputPlaceholder
         , pathString
-        , plainRowText
         , rolledInputTextForKeyAtIndex
         )
 import String exposing (fromInt)
@@ -112,7 +112,7 @@ rollButton : IndexPath -> Element Msg
 rollButton ip =
     Input.button [ alignRight ]
         { onPress = Just (Roll (Reroll ip))
-        , label = "roll " ++ IndexPath.toString ip |> text
+        , label = Icons.rollMany
         }
 
 
@@ -120,7 +120,7 @@ rollRowButton : IndexPath -> Int -> Element Msg
 rollRowButton ip ri =
     Input.button [ alignRight ]
         { onPress = Just (Roll (RerollSingleRow ip ri))
-        , label = "roll " ++ (IndexPath.toString ip ++ "/" ++ fromInt ri) |> text
+        , label = Icons.roll
         }
 
 
@@ -145,7 +145,13 @@ table ip t =
     fullWidthColumn (indexPath ip ++ [ spacing -1 ]) <|
         tableRollResults
             ip
-            [ title t.title (rollButton ip)
+            [ title t.title
+                (if List.length t.result > 1 then
+                    rollButton ip
+
+                 else
+                    none
+                )
             , tableExtraText t
             ]
             t.result
@@ -200,7 +206,6 @@ attributesForInputPlaceholder mods =
                 |> Maybe.map List.singleton
                 |> Maybe.withDefault []
 
-        -- TODO: Refactor
         bgColor : List (Attribute Msg)
         bgColor =
             List.Extra.findMap
@@ -351,7 +356,13 @@ splitTableRollResults res =
             ( res, [], [] )
 
 
-tableRollResultsHelp : Int -> Int -> IndexPath -> List (Element Msg) -> List TableRollResult -> List (Element Msg)
+tableRollResultsHelp :
+    Int
+    -> Int
+    -> IndexPath
+    -> List (Element Msg)
+    -> List TableRollResult
+    -> List (Element Msg)
 tableRollResultsHelp riOffset ipOffset ip headerEls res =
     let
         ( firstGroup, firstRefs, secondGroup ) =
@@ -444,7 +455,8 @@ app =
 ui : Model -> Html Msg
 ui model =
     app
-        [ results <| mapChildIndexes [] ref model.results
+        [ Icons.css
+        , results <| mapChildIndexes [] ref model.results
         , search model
         ]
         |> layout [ width fill, height (minimum 600 fill) ]

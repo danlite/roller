@@ -7,7 +7,7 @@ import Rollable exposing (Bundle, Path(..), RollInstructions, RollableRef(..), R
 
 mockRow : Row
 mockRow =
-    { text = "Row", range = Range 1 1, refs = [] }
+    { text = [ PlainText "Row" ], range = Range 1 1, refs = [] }
 
 
 mockRolledRow : List RollableRef -> TableRollResult
