@@ -27,6 +27,7 @@ import Rollable
         )
 import String exposing (fromInt)
 import UI.Search exposing (expressionString, search)
+import UI.Styles exposing (shadow)
 import Utils exposing (..)
 
 
@@ -85,7 +86,7 @@ bordered =
     [ Border.solid
     , Border.color (rgb 0 0 0)
     , Border.width 1
-    , Border.shadow { offset = ( 0, 1 ), size = 0, blur = 2, color = rgba 0 0 0 0.5 }
+    , shadow 1
     ]
 
 

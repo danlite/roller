@@ -1,6 +1,4 @@
 - TESTS
-- smaller text size
-  - sizing chart?
 - reroll individual inputs
 - store table variables in bundle context
   - support rollCount > 1 for bundles?

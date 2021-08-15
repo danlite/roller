@@ -1,4 +1,4 @@
-module UI.Search exposing (..)
+module UI.Search exposing (expressionString, search)
 
 import Dice exposing (Expr(..))
 import Dict
@@ -12,6 +12,7 @@ import Html.Events exposing (onBlur)
 import Model exposing (Model, Msg(..), Roll(..), TableDirectoryState(..), maxResults, rollablePath, selectedRollable, selectedRollablePath)
 import Rollable exposing (Rollable(..))
 import String exposing (fromInt)
+import UI.Styles exposing (shadow)
 
 
 loadButton : String -> List String -> Element Msg
@@ -125,7 +126,15 @@ searchResultsHelp model =
 
 search : Model -> Element Msg
 search model =
-    Keyed.column [ width fill, alignBottom, padding 10, spacing 10, Background.color (rgb 0.9 0.9 0.9) ]
+    Keyed.column
+        [ width fill
+        , alignBottom
+        , padding 10
+        , spacing 10
+        , Background.color (rgb 0.9 0.9 0.9)
+        , shadow -1
+        , Html.Attributes.style "z-index" "100" |> htmlAttribute
+        ]
         [ ( "results", searchResults model )
         , ( "input"
           , row [ width fill, spacing 10 ]
