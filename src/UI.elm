@@ -30,6 +30,21 @@ import UI.Search exposing (expressionString, search)
 import Utils exposing (..)
 
 
+scaled : Int -> Int
+scaled =
+    modular 16 1.25 >> round
+
+
+unit : Int
+unit =
+    8
+
+
+halfUnit : Int
+halfUnit =
+    4
+
+
 results : List (Element Msg) -> Element Msg
 results =
     fullWidthColumn
@@ -37,8 +52,8 @@ results =
             |> htmlAttribute
         , height <|
             minimum 0 fill
-        , padding 10
-        , spacingXY 0 20
+        , padding unit
+        , spacingXY 0 (unit * 2)
         , scrollbarY
         ]
 
@@ -117,7 +132,7 @@ children els =
 
         _ ->
             fullWidthColumn
-                [ paddingEach { top = 0, left = 40, right = 0, bottom = 0 }
+                [ paddingEach { top = 0, left = unit * 4, right = 0, bottom = 0 }
                 , spacing -1
                 ]
                 els
@@ -125,12 +140,12 @@ children els =
 
 title : String -> Element msg -> Element msg
 title t btn =
-    row [ width fill, padding 10 ] <| [ text t, btn ]
+    row [ width fill, padding unit ] <| [ text t, btn ]
 
 
 rollButton : IndexPath -> Element Msg
 rollButton ip =
-    Input.button [ alignRight, padding 5 ]
+    Input.button [ alignRight, padding halfUnit ]
         { onPress = Just (Roll (Reroll ip))
         , label = Icons.rollMany
         }
@@ -138,7 +153,7 @@ rollButton ip =
 
 rollRowButton : IndexPath -> Int -> Element Msg
 rollRowButton ip ri =
-    Input.button [ alignRight, padding 5 ]
+    Input.button [ alignRight, padding halfUnit ]
         { onPress = Just (Roll (RerollSingleRow ip ri))
         , label = Icons.roll
         }
@@ -156,7 +171,7 @@ bundle ip b =
 tableExtraText : RolledTable -> Element Msg
 tableExtraText t =
     t.extra
-        |> Maybe.map (row [ width fill, padding 10 ] << rolledText Dict.empty)
+        |> Maybe.map (row [ width fill, padding unit ] << rolledText Dict.empty)
         |> Maybe.withDefault none
 
 
@@ -313,11 +328,11 @@ rolledText inputs =
                                     { onPress = Nothing, label = text label }
                            )
 
-                PercentText p ->
-                    p.text
+                PercentText pt ->
+                    pt.text
                         |> rolledText inputs
                         |> paragraph
-                            (case p.value of
+                            (case pt.value of
                                 PercentResult True ->
                                     [ Font.bold ]
 
@@ -336,7 +351,7 @@ rollTotal t =
     <|
         el
             [ Font.center
-            , Font.size 16
+            , Font.size <| scaled -1
             , width (px 30)
             , height (px 30)
             , centerX
@@ -454,7 +469,7 @@ tableRollResult ip ri res =
     let
         rollRow : Int -> List (Element Msg) -> Element Msg
         rollRow rt els =
-            row [ padding 10, width fill ] (rollTotal rt :: els)
+            row [ padding unit, width fill ] (rollTotal rt :: els)
     in
     case res of
         RolledRow r ->
@@ -501,7 +516,7 @@ ui model =
         , results <| mapChildIndexes [] ref model.results
         , search model
         ]
-        |> layout [ width fill, height (minimum 600 fill) ]
+        |> layout [ width fill, height (minimum 600 fill), Font.size <| scaled 1 ]
 
 
 mapChildIndexesWithOffset : Int -> IndexPath -> (IndexPath -> a -> Element Msg) -> List a -> List (Element Msg)
