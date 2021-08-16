@@ -15,7 +15,9 @@ import List.Extra
 import Model exposing (Model, Msg(..), Roll(..))
 import Rollable
     exposing
-        ( Inputs
+        ( Bundle
+        , BundleRollResults(..)
+        , Inputs
         , RollableRef(..)
         , RollableRefData
         , TableRollResult(..)
@@ -148,7 +150,12 @@ rollButton : IndexPath -> Element Msg
 rollButton ip =
     Input.button [ alignRight, padding halfUnit ]
         { onPress = Just (Roll (Reroll ip))
-        , label = Icons.rollMany
+        , label =
+            paragraph []
+                [ Icons.rollMany
+
+                -- , IndexPath.toString ip |> text
+                ]
         }
 
 
@@ -156,16 +163,43 @@ rollRowButton : IndexPath -> Int -> Element Msg
 rollRowButton ip ri =
     Input.button [ alignRight, padding halfUnit ]
         { onPress = Just (Roll (RerollSingleRow ip ri))
-        , label = Icons.roll
+        , label =
+            paragraph []
+                [ Icons.roll
+
+                -- , IndexPath.toString ip |> text
+                ]
         }
 
 
-bundle : IndexPath -> BundleRef -> Element Msg
+bundleRef : IndexPath -> BundleRef -> Element Msg
+bundleRef ip b =
+    case b.result of
+        UnrolledBundleRef ->
+            fullWidthColumn (indexPath ip ++ [ spacing -1 ])
+                [ title b.bundle.title (rollButton ip)
+                    |> el ([ width fill, above ip, depthColor ip ] ++ bordered)
+                ]
+
+        RolledBundles res ->
+            fullWidthColumn (indexPath ip ++ [ spacing -1 ])
+                [ title b.bundle.title (rollButton ip)
+                    |> el ([ width fill, above ip, depthColor ip ] ++ bordered)
+                , children <| mapChildIndexes ip bundle res
+                ]
+
+
+
+-- _ ->
+--     fullWidthColumn [ spacing -1 ] <| mapChildIndexes ip bundle res
+
+
+bundle : IndexPath -> Bundle -> Element Msg
 bundle ip b =
     fullWidthColumn (indexPath ip ++ [ spacing -1 ])
-        [ title b.bundle.title (rollButton ip)
+        [ title b.title (rollButton ip)
             |> el ([ width fill, above ip, depthColor ip ] ++ bordered)
-        , children <| mapChildIndexes ip ref b.bundle.tables
+        , children <| mapChildIndexes ip ref b.tables
         ]
 
 
@@ -497,7 +531,7 @@ ref ip rr =
             table ip t
 
         BundleRef b ->
-            bundle ip b
+            bundleRef ip b
 
         Ref r ->
             fullWidthColumn
@@ -528,3 +562,8 @@ mapChildIndexesWithOffset offset index childView els =
 mapChildIndexes : IndexPath -> (IndexPath -> a -> Element Msg) -> List a -> List (Element Msg)
 mapChildIndexes =
     mapChildIndexesWithOffset 0
+
+
+childIndex : IndexPath -> IndexPath
+childIndex =
+    (++) [ 0 ]

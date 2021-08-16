@@ -1,7 +1,9 @@
 - TESTS
 - reroll individual inputs
-- store table variables in bundle context
-  - support rollCount > 1 for bundles?
+- better multi-roll-count bundle behaviour
+  - hide unnecessary header row
+    - this probably also fixes rerolling with dynamic (from context) rollCount value
+    - clean up nested code
 - simpler nested results state?
 - "pass-through" tables?
   - e.g. for:

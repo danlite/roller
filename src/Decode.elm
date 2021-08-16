@@ -143,6 +143,7 @@ rollInstructionsDecoder =
                 ]
             )
         |> andMap (maybe (field "modifier" variableDecoder))
+        |> andMap (oneOf [ field "store" (dict string), succeed Dict.empty ])
 
 
 type YamlRow

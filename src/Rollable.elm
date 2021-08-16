@@ -2,7 +2,7 @@ module Rollable exposing (..)
 
 import Dice exposing (Expr, FormulaTerm(..), InputPlaceholderModifier(..), Range, RollablePercent, RowTextComponent(..), rangeIncludes)
 import Dict exposing (Dict)
-import List.Extra exposing (getAt, setAt, updateAt)
+import List.Extra exposing (getAt, setAt, splitAt, updateAt)
 import Maybe exposing (withDefault)
 import Regex
 import Result exposing (fromMaybe)
@@ -40,9 +40,9 @@ type alias RollInstructions =
     , ignore : List Variable
     , modifier : Maybe Variable
 
-    --   store?: {
-    --     [key: string]: '$roll'
-    --   }
+    -- Store certain variables in a bundle context:
+    -- { newVariableName: variableNameFromRoll }
+    , store : Dict String String
     }
 
 
@@ -55,7 +55,13 @@ emptyInstructions =
     , unique = False
     , ignore = []
     , modifier = Nothing
+    , store = Dict.empty
     }
+
+
+onlyOneRollCount : RollInstructions -> RollInstructions
+onlyOneRollCount instructions =
+    { instructions | rollCount = Just (ConstValue 1) }
 
 
 type alias UnresolvedRollableRefData =
@@ -66,8 +72,13 @@ type alias RollableRefData =
     { path : Path, instructions : RollInstructions, title : Maybe String }
 
 
+type BundleRollResults
+    = UnrolledBundleRef
+    | RolledBundles (List Bundle)
+
+
 type alias WithBundle a =
-    { a | bundle : Bundle }
+    { a | bundle : Bundle, result : BundleRollResults }
 
 
 type alias WithTableResult a =
@@ -88,6 +99,19 @@ updateBundle original result =
 simpleRef : String -> RollableRef
 simpleRef path =
     Ref { path = ResolvedPath path, instructions = emptyInstructions, title = Nothing }
+
+
+refDataForRollable : RollableRef -> RollableRefData
+refDataForRollable r =
+    case r of
+        Ref data ->
+            data
+
+        BundleRef br ->
+            { path = br.path, title = br.title, instructions = br.instructions }
+
+        RolledTable rt ->
+            { path = rt.path, title = Just rt.title, instructions = rt.instructions }
 
 
 type TableRollResult
@@ -395,19 +419,48 @@ replaceNestedRef : IndexPath -> RollableRef -> RollableRef -> RollableRef
 replaceNestedRef index new old =
     case index of
         [] ->
-            new
+            old
 
         _ ->
             case old of
                 BundleRef info ->
-                    BundleRef
-                        { info
-                            | bundle =
-                                { path = info.bundle.path
-                                , title = info.bundle.title
-                                , tables = replaceAtIndex index new info.bundle.tables
-                                }
-                        }
+                    case info.result of
+                        UnrolledBundleRef ->
+                            old
+
+                        RolledBundles bundles ->
+                            case index of
+                                [ i ] ->
+                                    case new of
+                                        BundleRef newBundleRef ->
+                                            case newBundleRef.result of
+                                                RolledBundles newBundleResults ->
+                                                    -- convert BundleRef back into Bundle
+                                                    List.head newBundleResults
+                                                        |> Maybe.map
+                                                            (\newBundleOnlyResult ->
+                                                                BundleRef
+                                                                    { info
+                                                                        | result =
+                                                                            List.Extra.setAt i
+                                                                                newBundleOnlyResult
+                                                                                bundles
+                                                                                |> RolledBundles
+                                                                    }
+                                                            )
+                                                        |> Maybe.withDefault old
+
+                                                _ ->
+                                                    old
+
+                                        _ ->
+                                            old
+
+                                _ ->
+                                    BundleRef
+                                        { info
+                                            | result = replaceAtIndexOfRolledBundles index new bundles
+                                        }
 
                 RolledTable info ->
                     RolledTable
@@ -421,6 +474,30 @@ replaceNestedRef index new old =
 
                 _ ->
                     old
+
+
+replaceAtIndexOfRolledBundles : IndexPath -> RollableRef -> List Bundle -> BundleRollResults
+replaceAtIndexOfRolledBundles index new bundles =
+    RolledBundles <|
+        case index of
+            [ i ] ->
+                case new of
+                    BundleRef newBundle ->
+                        -- convert BundleRef back into Bundle
+                        List.Extra.updateAt i
+                            (\bundle -> { bundle | tables = List.Extra.setAt i new bundle.tables })
+                            bundles
+
+                    _ ->
+                        bundles
+
+            i :: rest ->
+                List.Extra.updateAt i
+                    (\bundle -> { bundle | tables = replaceAtIndex rest new bundle.tables })
+                    bundles
+
+            _ ->
+                bundles
 
 
 replaceAtIndexOfRolledTable : IndexPath -> RollableRef -> List TableRollResult -> List TableRollResult

@@ -2,12 +2,18 @@ module RollContext exposing (..)
 
 import Dice exposing (RolledValue(..), RowTextComponent(..))
 import Dict exposing (Dict)
+import IndexPath
 import List.Extra
-import Rollable exposing (IndexPath, RollableRef(..), TableRollResult(..), tableRollResultsRefs)
+import Rollable exposing (Bundle, BundleRollResults(..), IndexPath, RollableRef(..), TableRollResult(..), onlyOneRollCount, tableRollResultsRefs)
 
 
 type alias Context =
     ( Int, Dict String Int )
+
+
+emptyContext : Context
+emptyContext =
+    ( 0, Dict.empty )
 
 
 increaseDepth : Context -> Context
@@ -37,13 +43,13 @@ addToContextFromRowTextComponent text context =
 
 
 addToContextFromResult : TableRollResult -> Context -> Context
-addToContextFromResult result context =
+addToContextFromResult result =
     case result of
         RolledRow row ->
-            List.foldl addToContextFromRowTextComponent context row.result.text
+            \context -> List.foldl addToContextFromRowTextComponent context row.result.text
 
         _ ->
-            context
+            identity
 
 
 addToContextFromResults : List TableRollResult -> Context -> Context
@@ -52,20 +58,19 @@ addToContextFromResults results context =
 
 
 addToContextFromRef : RollableRef -> Context -> Context
-addToContextFromRef ref context =
-    context
-        |> (case ref of
-                RolledTable t ->
-                    addToContextFromResults t.result
+addToContextFromRef ref =
+    case ref of
+        RolledTable t ->
+            addToContextFromResults t.result
 
-                _ ->
-                    identity
-           )
+        _ ->
+            -- Debug.log "do not know how to merge context from a bundle" identity
+            identity
 
 
 contextFromRef : RollableRef -> Context
 contextFromRef ref =
-    addToContextFromRef ref ( 0, Dict.empty )
+    addToContextFromRef ref emptyContext
 
 
 refAtIndex : IndexPath -> Context -> List RollableRef -> Maybe ( Context, RollableRef )
@@ -91,9 +96,32 @@ refAtIndex index context model =
                         _ ->
                             context
             in
-            case List.Extra.getAt i model of
+            case ref of
                 Just (BundleRef bundleRef) ->
-                    refAtIndex rest newContext bundleRef.bundle.tables
+                    case bundleRef.result of
+                        UnrolledBundleRef ->
+                            Nothing
+
+                        RolledBundles bundles ->
+                            case rest of
+                                [ rolledBundleIndex ] ->
+                                    List.Extra.getAt rolledBundleIndex bundles
+                                        |> Maybe.map
+                                            -- convert Bundle into BundleRef
+                                            (\b ->
+                                                ( newContext
+                                                , BundleRef
+                                                    { bundle = b
+                                                    , path = bundleRef.path
+                                                    , instructions = onlyOneRollCount bundleRef.instructions
+                                                    , title = bundleRef.title
+                                                    , result = UnrolledBundleRef
+                                                    }
+                                                )
+                                            )
+
+                                _ ->
+                                    refAtIndexOfRolledBundles rest newContext bundles
 
                 Just (RolledTable info) ->
                     case info.result of
@@ -121,6 +149,18 @@ refAtIndexOfRolledTable index context results =
         _ :: _ ->
             tableRollResultsRefs results
                 |> refAtIndex index context
+
+        _ ->
+            Nothing
+
+
+refAtIndexOfRolledBundles : IndexPath -> Context -> List Bundle -> Maybe ( Context, RollableRef )
+refAtIndexOfRolledBundles index context rolledBundles =
+    case index of
+        i :: rest ->
+            List.Extra.getAt i rolledBundles
+                |> Maybe.map .tables
+                |> Maybe.andThen (refAtIndex rest context)
 
         _ ->
             Nothing

@@ -19,11 +19,22 @@ import Parse
 import Parser
 import Random exposing (..)
 import Random.Extra exposing (sequence)
-import RollContext exposing (Context, addToContextFromRef, addToContextFromResult, addToContextFromResults, depth, increaseDepth)
+import RollContext
+    exposing
+        ( Context
+        , addToContextFromRef
+        , addToContextFromResult
+        , addToContextFromResults
+        , contextFromRef
+        , depth
+        , increaseDepth
+        )
 import Rollable
     exposing
         ( Bundle
+        , BundleRollResults(..)
         , EvaluatedRow
+        , Path
         , Registry
         , RollInstructions
         , RollableRef(..)
@@ -33,9 +44,10 @@ import Rollable
         , WithTableResult
         , findBundleSource
         , findTableSource
+        , onlyOneRollCount
         , pathString
+        , refDataForRollable
         , rollResultForRollOnTable
-        , updateBundle
         )
 
 
@@ -55,7 +67,7 @@ evaluateVariable context variable =
                     v
 
                 _ ->
-                    Debug.todo ("missing context key: " ++ k)
+                    Debug.log ("missing context key: " ++ k) 0
 
 
 rollResultNumber : TableRollResult -> Int
@@ -239,6 +251,11 @@ rollValue v =
 
 rollOnBundleRefs : Registry -> Context -> List RollableRef -> Generator (List RollableRef)
 rollOnBundleRefs registry context refs =
+    let
+        mergeContext =
+            \bc ->
+                Tuple.mapSecond (Dict.union bc) context
+    in
     case List.Extra.uncons refs of
         Nothing ->
             constant []
@@ -247,16 +264,61 @@ rollOnBundleRefs registry context refs =
             rollOnRef registry context ref
                 |> andThen
                     (\rolledRef ->
+                        let
+                            stored =
+                                Dict.map
+                                    (\_ toStore ->
+                                        evaluateVariable
+                                            (contextFromRef rolledRef)
+                                            (ContextKey toStore)
+                                    )
+                                    (refDataForRollable ref).instructions.store
+
+                            mergedContext =
+                                mergeContext stored
+                        in
                         map2 (::)
                             (constant rolledRef)
-                            (rollOnBundleRefs registry context otherRefs)
+                            (rollOnBundleRefs registry mergedContext otherRefs)
                     )
 
 
-rollOnBundle : Registry -> Context -> Bundle -> Generator Bundle
-rollOnBundle registry context bundle =
+rollOnBundleWithInstructions : RollInstructions -> Registry -> Context -> Bundle -> Generator (List Bundle)
+rollOnBundleWithInstructions instructions registry context bundle =
+    let
+        rollCount =
+            evaluateVariable context (withDefault (ConstValue 1) instructions.rollCount)
+    in
     rollOnBundleRefs registry context bundle.tables
-        |> map (\refs -> { bundle | tables = refs })
+        |> List.repeat rollCount
+        |> sequence
+        |> map
+            (\bundlesTables ->
+                List.map
+                    (\tables -> { bundle | tables = tables })
+                    bundlesTables
+            )
+
+
+rollOnBundleRef :
+    Registry
+    -> Context
+    -> { a | instructions : RollInstructions, path : Path, title : Maybe String }
+    -> Bundle
+    -> Generator RollableRef
+rollOnBundleRef registry context refData bundle =
+    rollOnBundleWithInstructions refData.instructions registry context bundle
+        |> map RolledBundles
+        |> map
+            (\rolledBundles ->
+                BundleRef
+                    { path = refData.path
+                    , title = refData.title
+                    , instructions = refData.instructions
+                    , bundle = bundle
+                    , result = rolledBundles
+                    }
+            )
 
 
 otherwiseMaybe : Maybe a -> Maybe a -> Maybe a
@@ -267,6 +329,28 @@ otherwiseMaybe value fallback =
 
         _ ->
             value
+
+
+flattenRolledRefGens : Generator (List RollableRef) -> Generator (List RollableRef)
+flattenRolledRefGens rolledRefGen =
+    let
+        addRolledRefToRefGenList : RollableRef -> Generator (List (Generator RollableRef)) -> Generator (List (Generator RollableRef))
+        addRolledRefToRefGenList rr rglg =
+            map
+                (\rgl ->
+                    rgl ++ ([ rr ] |> List.map constant)
+                )
+                rglg
+    in
+    rolledRefGen
+        |> andThen
+            (\rolledRefs ->
+                List.foldl
+                    addRolledRefToRefGenList
+                    (constant [])
+                    rolledRefs
+                    |> andThen sequence
+            )
 
 
 rollRefsForTableResult : Registry -> Context -> TableRollResult -> Generator TableRollResult
@@ -320,23 +404,13 @@ rollOnRef registry context r =
                 _ ->
                     case findBundleSource registry ref.path of
                         Just bundle ->
-                            rollOnBundle registry newContext bundle
-                                |> map
-                                    (\res ->
-                                        BundleRef
-                                            { bundle = res
-                                            , instructions = ref.instructions
-                                            , path = ref.path
-                                            , title = ref.instructions.title |> otherwiseMaybe ref.title
-                                            }
-                                    )
+                            rollOnBundleRef registry newContext ref bundle
 
                         _ ->
                             Debug.todo ("unfindable table/bundle in registry: " ++ pathString ref.path)
 
         BundleRef ref ->
-            rollOnBundle registry newContext ref.bundle
-                |> map (updateBundle ref)
+            rollOnBundleRef registry newContext ref ref.bundle
 
         RolledTable ref ->
             rollOnRef registry newContext (Ref { path = ref.path, instructions = ref.instructions, title = Just ref.title })
@@ -368,11 +442,6 @@ mapTupleFirst tuple =
     mapTuple <| Tuple.mapFirst constant tuple
 
 
-onlyOneRollCount : RollInstructions -> RollInstructions
-onlyOneRollCount instructions =
-    { instructions | rollCount = Just (ConstValue 1) }
-
-
 updateRowResult : Int -> TableRollResult -> WithTableResult a -> WithTableResult a
 updateRowResult rowIndex newResult rolledTable =
     { rolledTable | result = List.Extra.setAt rowIndex newResult rolledTable.result }
@@ -380,6 +449,10 @@ updateRowResult rowIndex newResult rolledTable =
 
 rerollSingleTableRow : Registry -> Context -> RollableRef -> Int -> Generator RollableRef
 rerollSingleTableRow registry context r rowIndex =
+    let
+        defaultResult =
+            constant r
+    in
     case r of
         RolledTable ref ->
             case findTableSource registry ref.path of
@@ -404,10 +477,10 @@ rerollSingleTableRow registry context r rowIndex =
                             )
 
                 _ ->
-                    constant r
+                    defaultResult
 
         _ ->
-            constant r
+            defaultResult
 
 
 type alias ExprRoller =

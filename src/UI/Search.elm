@@ -33,6 +33,7 @@ searchField model =
                         , loadButton "XGtE" [ "/xgte" ]
                         , loadButton "UNE" [ "/une" ]
                         , loadButton "DMG" [ "/dmg", "/spells" ]
+                        , loadButton "Test" [ "/test", "/siblings", "/supplemental/" ]
 
                         -- , loadButton "" ""
                         ]
