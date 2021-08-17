@@ -1,9 +1,7 @@
 - TESTS
+- convert to monorepo alongside 1) server and 2) SRD-friendly rollables
 - reroll individual inputs
-- better multi-roll-count bundle behaviour
-  - hide unnecessary header row
-    - this probably also fixes rerolling with dynamic (from context) rollCount value
-    - clean up nested code
+- clean up nested code for multi-roll-count bundle
 - simpler nested results state?
 - "pass-through" tables?
   - e.g. for:

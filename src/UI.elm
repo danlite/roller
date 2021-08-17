@@ -182,16 +182,8 @@ bundleRef ip b =
                 ]
 
         RolledBundles res ->
-            fullWidthColumn (indexPath ip ++ [ spacing -1 ])
-                [ title b.bundle.title (rollButton ip)
-                    |> el ([ width fill, above ip, depthColor ip ] ++ bordered)
-                , children <| mapChildIndexes ip bundle res
-                ]
-
-
-
--- _ ->
---     fullWidthColumn [ spacing -1 ] <| mapChildIndexes ip bundle res
+            fullWidthColumn (indexPath ip ++ [ spacing -1 ]) <|
+                mapChildIndexes ip bundle res
 
 
 bundle : IndexPath -> Bundle -> Element Msg
