@@ -1,8 +1,8 @@
 module Rollable exposing (..)
 
-import Dice exposing (Expr, FormulaTerm(..), InputPlaceholderModifier(..), Range, RollablePercent, RowTextComponent(..), rangeIncludes)
+import Dice exposing (Expr, FormulaTerm(..), InputPlaceholderModifier(..), Range, RowTextComponent(..), rangeIncludes)
 import Dict exposing (Dict)
-import List.Extra exposing (getAt, setAt, splitAt, updateAt)
+import List.Extra exposing (getAt, setAt, updateAt)
 import Maybe exposing (withDefault)
 import Regex
 import Result exposing (fromMaybe)
@@ -482,7 +482,7 @@ replaceAtIndexOfRolledBundles index new bundles =
         case index of
             [ i ] ->
                 case new of
-                    BundleRef newBundle ->
+                    BundleRef _ ->
                         -- convert BundleRef back into Bundle
                         List.Extra.updateAt i
                             (\bundle -> { bundle | tables = List.Extra.setAt i new bundle.tables })

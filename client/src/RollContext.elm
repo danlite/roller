@@ -2,7 +2,6 @@ module RollContext exposing (..)
 
 import Dice exposing (RolledValue(..), RowTextComponent(..))
 import Dict exposing (Dict)
-import IndexPath
 import List.Extra
 import Rollable exposing (Bundle, BundleRollResults(..), IndexPath, RollableRef(..), TableRollResult(..), onlyOneRollCount, tableRollResultsRefs)
 

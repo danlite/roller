@@ -15,7 +15,6 @@ import Dice
         , makeSingleRange
         )
 import Parser exposing (..)
-import Random.Int exposing (negativeInt)
 import Set
 import String exposing (toInt)
 
@@ -332,7 +331,7 @@ percentText =
                             Ok rtcs ->
                                 ( rtcs, value )
 
-                            Err e ->
+                            Err _ ->
                                 ( [], value )
                     )
            )

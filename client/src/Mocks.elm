@@ -2,7 +2,7 @@ module Mocks exposing (..)
 
 import Dice exposing (Range, RowTextComponent(..), makeSingleRange)
 import Dict
-import Rollable exposing (Bundle, Path(..), RollInstructions, RollableRef(..), Row, TableRollResult(..))
+import Rollable exposing (Bundle, BundleRollResults(..), Path(..), RollInstructions, RollableRef(..), Row, TableRollResult(..))
 
 
 mockRow : Row
@@ -40,6 +40,7 @@ mockRollInstructions =
     , unique = False
     , ignore = []
     , modifier = Nothing
+    , store = Dict.empty
     }
 
 
@@ -54,7 +55,13 @@ mockTableRef path =
 
 mockBundleRef : String -> List RollableRef -> RollableRef
 mockBundleRef path tables =
-    BundleRef { bundle = mockBundle path tables, path = ResolvedPath path, instructions = mockRollInstructions, title = Nothing }
+    BundleRef
+        { bundle = mockBundle path tables
+        , path = ResolvedPath path
+        , instructions = mockRollInstructions
+        , title = Nothing
+        , result = UnrolledBundleRef
+        }
 
 
 mockBundle : String -> List RollableRef -> Bundle
