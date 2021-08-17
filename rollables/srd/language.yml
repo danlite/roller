@@ -1,0 +1,13 @@
+title: Language
+dice: d6
+inputs:
+  Standard:
+    path: $/standard
+    ignore: 1
+  Exotic:
+    path: $/exotic
+
+rows:
+  - 1-3|Common
+  - 4-5|[Standard]
+  - 6|[Exotic]

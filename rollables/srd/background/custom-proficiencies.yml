@@ -1,0 +1,17 @@
+title: Custom Proficiencies
+rows:
+  - "Two languages"
+  - path: ../language
+    rollCount: 2
+    unique: true
+    ignore: 1-3
+  - "Two tools"
+  - path: ../equipment/tool
+    rollCount: 2
+    unique: true
+  - "One language and one tool"
+  - path: ../language
+    unique: true
+    ignore: 1-3
+  - path: ../equipment/tool
+    unique: true

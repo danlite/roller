@@ -1,0 +1,12 @@
+title: NPC
+inputs:
+  NPC:
+    path: /srd/monster/npc
+  Race:
+    path: /srd/race
+  MonstrousRace:
+    path: /srd/monster/monstrous-humanoid
+dice: d6
+rows:
+  - 1-5|[Race] [NPC:t=l]
+  - 6|[MonstrousRace] [NPC:t=l]

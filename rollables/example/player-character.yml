@@ -1,0 +1,6 @@
+title: Player Character
+tables:
+  - path: ./ability-scores
+  - path: /srd/class
+  - path: /srd/race
+  - path: /srd/background/custom

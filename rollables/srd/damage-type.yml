@@ -1,0 +1,16 @@
+title: Damage Type
+dice: d20
+inputs:
+  Mundane:
+    path: $/mundane
+  Elemental:
+    path: $/elemental
+  Mystical:
+    path: $/mystical
+rows:
+  - 1-3|[Mundane]
+  - 4-7|Poison
+  - 8-15|[Elemental]
+  - 16-17|[Mystical]
+  - 18-19|[Mundane] (magical)
+  - 20|Force

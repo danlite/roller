@@ -1,0 +1,17 @@
+title: Tools
+inputs:
+  Artisan:
+    path: $/artisan
+  Gaming:
+    path: $/gaming
+  Musical:
+    path: $/musical
+rows:
+  - 1-4|[Artisan]
+  - 5-6|[Musical]
+  - 7|[Gaming]
+  - 8|Navigator’s tools
+  - 9|Poisoner’s kit
+  - 10|Thieves’ tools
+  - 11|Vehicles (land)
+  - 12|Vehicles (water)

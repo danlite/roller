@@ -1,0 +1,6 @@
+title: Custom Background
+tables:
+  - path: ../skill
+    rollCount: 2
+    unique: true
+  - path: ./custom-proficiencies

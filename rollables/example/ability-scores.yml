@@ -1,0 +1,8 @@
+title: Ability Scores
+inputs:
+  Score:
+    path: ./standard-array
+    rollCount: 6
+    unique: true
+rows:
+  - "Str [Score:[0]] / Dex [Score:[1]] / Con [Score:[2]] / Wis [Score:[3]] / Int [Score:[4]] / Cha [Score:[5]]"
