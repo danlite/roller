@@ -5,6 +5,7 @@ import Browser.Events exposing (onKeyDown)
 import Debounce
 import Json.Decode
 import KeyPress exposing (keyDecoder)
+import Loader exposing (getDirectory)
 import Model exposing (Model, Msg(..), TableDirectoryState(..), update)
 import UI exposing (ui)
 
@@ -25,8 +26,8 @@ initialModel =
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( initialModel
-    , Cmd.none
-      -- , getDirectory GotDirectory
+      -- , Cmd.none
+    , getDirectory [] GotDirectory
     )
 
 
