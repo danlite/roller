@@ -1,0 +1,12 @@
+title: Adventurer Name
+inputs:
+  Name:
+    path: $/first-name
+  Epithet:
+    path: $/epithet
+rows:
+  - "[Name] the [Epithet]"
+  - "[Name] of the [Epithet]"
+  - "[Name], [Epithet] One"
+  - "[Epithet] [Name]"
+  - "[Epithet] One, [Name]"
