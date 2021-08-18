@@ -5,7 +5,8 @@ import Browser.Events exposing (onKeyDown)
 import Debounce
 import Json.Decode
 import KeyPress exposing (keyDecoder)
-import Loader exposing (getDirectory)
+import Loader exposing (getDirectoryIndex)
+import MessageToast
 import Model exposing (Model, Msg(..), TableDirectoryState(..), update)
 import UI exposing (ui)
 
@@ -20,14 +21,14 @@ initialModel =
     , inSearchField = False
     , searchResultOffset = 0
     , debounce = Debounce.init
+    , messageToast = MessageToast.init UpdatedSimpleMessageToast
     }
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( initialModel
-      -- , Cmd.none
-    , getDirectory [] GotDirectory
+    , getDirectoryIndex [] GotDirectoryIndex
     )
 
 
@@ -42,5 +43,8 @@ main =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    onKeyDown (Json.Decode.map KeyPressTableSearch keyDecoder)
+subscriptions model =
+    Sub.batch
+        [ onKeyDown (Json.Decode.map KeyPressTableSearch keyDecoder)
+        , MessageToast.subscriptions model.messageToast
+        ]

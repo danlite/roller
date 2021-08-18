@@ -12,6 +12,7 @@ import Html.Attributes
 import Icons
 import IndexPath exposing (IndexPath)
 import List.Extra
+import MessageToast
 import Model exposing (Model, Msg(..), Roll(..))
 import Rollable
     exposing
@@ -52,6 +53,8 @@ results : List (Element Msg) -> Element Msg
 results =
     fullWidthColumn
         [ Html.Attributes.id "results"
+            |> htmlAttribute
+        , Html.Attributes.style "z-index" "0"
             |> htmlAttribute
         , height <|
             minimum 0 fill
@@ -542,6 +545,7 @@ ui model =
         [ Icons.css
         , results <| mapChildIndexes [] ref model.results
         , search model
+        , MessageToast.view model.messageToast |> html
         ]
         |> layout [ width fill, height (minimum 600 fill), Font.size <| scaled 1 ]
 

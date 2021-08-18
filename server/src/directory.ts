@@ -17,19 +17,20 @@ const filesInDir = R.curry((root: string, dir: string): string[] =>
         ? rootRelativeEntry.replace(/\.yml$/, '')
         : null
     })
-    .filter((x): x is string => x !== null),
+    .filter((x): x is string => x !== null)
 )
 
-// const ROOT = Path.resolve('../rolltables-private/tables')
-const ROOT = Path.resolve('../rollables')
+// export const ROOT = Path.resolve('../../../rolltables-private/tables')
+export const ROOT = Path.resolve('../rollables')
 const filesInRoot = filesInDir(ROOT)
 
 export const index = () => filesInRoot('/')
 
 export const retrieve = (entry: string): string => {
+  entry = entry.replace(/^[\/]+/, '')
   const absoluteEntry = Path.resolve(ROOT, entry)
   if (!absoluteEntry.startsWith(ROOT)) {
-    throw new Error('entry out of bounds!')
+    throw new Error(`entry ${absoluteEntry} out of bounds!`)
   }
   return fs.readFileSync(absoluteEntry + '.yml').toString('utf-8')
 }

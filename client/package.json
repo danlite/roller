@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "description": "Elm dev dependencies",
   "scripts": {
+    "build": "elm make --optimize --output=dist/assets/elm.js src/Main.elm && cp src/index.html dist/ && echo \"✅ Built Elm application into client/dist\"",
+    "serve": "npm run build && npx http-server dist",
     "reactor": "elm reactor"
   },
   "author": "",

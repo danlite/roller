@@ -266,7 +266,8 @@ replaceRegex : String -> (Regex.Match -> String) -> String -> String
 replaceRegex userRegex replacer string =
     case Regex.fromString userRegex of
         Nothing ->
-            Debug.log "bad regex" string
+            -- TODO: handle bad regex?
+            string
 
         Just regex ->
             Regex.replace regex replacer string

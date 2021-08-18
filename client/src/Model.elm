@@ -7,14 +7,16 @@ import IndexPath exposing (IndexPath)
 import KeyPress exposing (KeyValue)
 import List exposing (map)
 import List.Extra
-import Loader exposing (RollableLoadResult, getDirectory, loadTable)
+import Loader exposing (RollableLoadResult, decodeAllDirectoryEntries, decodeNextDirectoryEntry, getDirectoryIndex, loadTable)
 import Maybe exposing (withDefault)
+import MessageToast exposing (MessageToast)
 import Random
 import Roll exposing (rerollSingleTableRow, rollOnRef)
 import RollContext exposing (Context, refAtIndex)
 import Rollable exposing (Registry, Rollable(..), RollableRef(..), replaceAtIndex, simpleRef)
 import Scroll exposing (jumpToBottom)
 import Search exposing (fuzzySearch)
+import String exposing (fromInt)
 import Task
 
 
@@ -27,6 +29,7 @@ type alias Model =
     , inSearchField : Bool
     , searchResultOffset : Int
     , debounce : Debounce String
+    , messageToast : MessageToast Msg
     }
 
 
@@ -58,24 +61,20 @@ rollablePath rollable =
             e.path
 
 
-loadedTable : Model -> RollableLoadResult -> Model
-loadedTable model result =
+decodedTable : Result String Rollable -> Model -> Model
+decodedTable result model =
     let
         newDirectoryUpdate =
             case result of
-                Ok decodeResult ->
-                    case decodeResult of
-                        Ok rollable ->
-                            Dict.insert (rollablePath rollable) rollable
+                Ok rollable ->
+                    Dict.insert (rollablePath rollable) rollable
 
-                        Err e ->
-                            Debug.log ("decodeResult! " ++ e) identity
-
-                _ ->
+                Err _ ->
                     identity
     in
     case model.registry of
         TableLoadingProgress n dict ->
+            -- case Debug.log "decodedTable" n of
             case n of
                 1 ->
                     { model
@@ -90,6 +89,16 @@ loadedTable model result =
             model
 
 
+loadedTable : Model -> RollableLoadResult -> Model
+loadedTable model result =
+    case result of
+        Ok decodeResult ->
+            decodedTable decodeResult model
+
+        _ ->
+            model
+
+
 type TableDirectoryState
     = TableDirectoryLoading
     | TableDirectoryFailed String
@@ -99,11 +108,14 @@ type TableDirectoryState
 
 type Msg
     = NoOp
+    | UpdatedSimpleMessageToast (MessageToast Msg)
     | Roll Roll
     | DidRoll IndexPath RollableRef
     | RollNew RollableRef
-    | RequestDirectory (List String)
-    | GotDirectory (Result Http.Error (List String))
+    | GotDirectory (Result Http.Error (List ( String, String )))
+    | DecodedTable (Result String Rollable) (List ( String, String ))
+    | RequestDirectoryIndex (List String)
+    | GotDirectoryIndex (Result Http.Error (List String))
     | LoadTable String
     | LoadedTable String RollableLoadResult
     | InputTableSearch String
@@ -129,12 +141,42 @@ rootContext =
 
 
 maybeLog : Bool -> String -> a -> a
-maybeLog log message value =
+maybeLog log _ value =
     if log then
-        Debug.log message value
+        -- Debug.log message value
+        value
 
     else
         value
+
+
+showError : String -> Model -> Model
+showError message model =
+    { model
+        | messageToast =
+            model.messageToast
+                |> MessageToast.danger
+                |> MessageToast.withMessage message
+    }
+
+
+showHttpError : Http.Error -> Model -> Model
+showHttpError httpError =
+    case httpError of
+        Http.BadUrl url ->
+            showError ("Bad URL: " ++ url)
+
+        Http.Timeout ->
+            showError "Request timed out"
+
+        Http.NetworkError ->
+            showError "Network error"
+
+        Http.BadStatus status ->
+            showError ("Request status " ++ fromInt status)
+
+        Http.BadBody _ ->
+            showError "Malformed response body"
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -142,7 +184,10 @@ update msg model =
     let
         _ =
             case msg of
-                GotDirectory _ ->
+                UpdatedSimpleMessageToast _ ->
+                    msg
+
+                GotDirectoryIndex _ ->
                     msg
 
                 LoadedTable _ _ ->
@@ -158,6 +203,10 @@ update msg model =
         NoOp ->
             ( model, Cmd.none )
 
+        UpdatedSimpleMessageToast updatedMessageToast ->
+            -- Only needed to re-assign the updated MessageToast to the model.
+            ( { model | messageToast = updatedMessageToast }, Cmd.none )
+
         Roll rollWhere ->
             case rollWhere of
                 Reroll index ->
@@ -166,7 +215,7 @@ update msg model =
                             ( model, Random.generate (DidRoll index) (rollOnRef registry context ref) )
 
                         _ ->
-                            ( model, Debug.log "none found!" Cmd.none )
+                            ( showError "No rollable found!" model, Cmd.none )
 
                 RerollSingleRow index rowIndex ->
                     case ( refAtIndex index rootContext model.results, model.registry ) of
@@ -174,7 +223,7 @@ update msg model =
                             ( model, Random.generate (DidRoll index) (rerollSingleTableRow registry context ref rowIndex) )
 
                         _ ->
-                            ( model, Debug.log "none found!" Cmd.none )
+                            ( showError "No row found!" model, Cmd.none )
 
                 SelectedTable ->
                     case ( selectedRef model, model.registry ) of
@@ -194,13 +243,27 @@ update msg model =
         RollNew ref ->
             ( { model | results = model.results ++ [ ref ] }, jumpToBottom NoOp )
 
-        RequestDirectory filterString ->
-            ( model, getDirectory filterString GotDirectory )
+        GotDirectory res ->
+            case res of
+                Ok contents ->
+                    -- ( { model | registry = TableLoadingProgress (List.length contents) Dict.empty }
+                    -- , decodeNextDirectoryEntry DecodedTable contents
+                    -- )
+                    ( { model | registry = TableDirectory (decodeAllDirectoryEntries contents) }, Cmd.none )
 
-        GotDirectory result ->
+                Err httpError ->
+                    ( showHttpError httpError model, Cmd.none )
+
+        DecodedTable res contents ->
+            ( decodedTable res model, decodeNextDirectoryEntry DecodedTable contents )
+
+        RequestDirectoryIndex filterString ->
+            ( model, getDirectoryIndex filterString GotDirectoryIndex )
+
+        GotDirectoryIndex result ->
             case result of
                 Err e ->
-                    ( { model | registry = TableDirectoryFailed (Debug.toString e) }, Cmd.none )
+                    ( showHttpError e { model | registry = TableDirectoryFailed "" }, Cmd.none )
 
                 Ok list ->
                     ( { model | registry = TableLoadingProgress (List.length list) Dict.empty }

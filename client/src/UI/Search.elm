@@ -15,11 +15,6 @@ import String exposing (fromInt)
 import UI.Styles exposing (shadow)
 
 
-loadButton : String -> List String -> Element Msg
-loadButton label filters =
-    Input.button [] { onPress = Just (RequestDirectory filters), label = text label }
-
-
 searchField : Model -> Element Msg
 searchField model =
     column [ width fill ] <|
@@ -27,22 +22,13 @@ searchField model =
             case model.registry of
                 TableDirectoryLoading ->
                     row [ width fill, spaceEvenly ]
-                        [ loadButton "All" []
-                        , loadButton "Lazy DM" [ "/lazy-dm" ]
-                        , loadButton "DW PW" [ "/perilous-wilds" ]
-                        , loadButton "XGtE" [ "/xgte" ]
-                        , loadButton "UNE" [ "/une" ]
-                        , loadButton "DMG" [ "/dmg", "/spells" ]
-                        , loadButton "Test" [ "/test", "/siblings", "/supplemental/" ]
-
-                        -- , loadButton "" ""
-                        ]
+                        [ text "Loading rollables..." ]
 
                 TableDirectoryFailed e ->
-                    text ("Error! " ++ e)
+                    text ("Error loading rollables! " ++ e)
 
                 TableLoadingProgress _ dict ->
-                    text ("Loaded " ++ fromInt (Dict.size dict) ++ " tables...")
+                    text ("Loaded " ++ fromInt (Dict.size dict) ++ " rollables...")
 
                 TableDirectory _ ->
                     Input.search
@@ -134,7 +120,7 @@ search model =
         , spacing 10
         , Background.color (rgb 0.9 0.9 0.9)
         , shadow -1
-        , Html.Attributes.style "z-index" "100" |> htmlAttribute
+        , Html.Attributes.style "z-index" "1" |> htmlAttribute
         ]
         [ ( "results", searchResults model )
         , ( "input"

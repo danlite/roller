@@ -67,7 +67,8 @@ evaluateVariable context variable =
                     v
 
                 _ ->
-                    Debug.log ("missing context key: " ++ k) 0
+                    -- TODO: error for missing context key
+                    0
 
 
 rollResultNumber : TableRollResult -> Int
@@ -407,7 +408,8 @@ rollOnRef registry context r =
                             rollOnBundleRef registry newContext ref bundle
 
                         _ ->
-                            Debug.todo ("unfindable table/bundle in registry: " ++ pathString ref.path)
+                            -- TODO: handle unfindable table/bundle in registry
+                            constant r
 
         BundleRef ref ->
             rollOnBundleRef registry newContext ref ref.bundle

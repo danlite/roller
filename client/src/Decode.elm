@@ -56,12 +56,12 @@ decodeRange =
             (\res ->
                 case res of
                     Err e ->
-                        fail ("Range parsing failed: " ++ Debug.toString e)
+                        fail ("Range parsing failed: " ++ Parser.deadEndsToString e)
 
                     Ok r ->
                         case r of
                             Err e ->
-                                fail ("Range parsing failed 2: " ++ Debug.toString e)
+                                fail ("Range parsing failed 2: " ++ e)
 
                             Ok range ->
                                 succeed range
@@ -85,7 +85,7 @@ exprDecoder =
             (\res ->
                 case res of
                     Err e ->
-                        fail ("Expression parsing failed: " ++ Debug.toString e)
+                        fail ("Expression parsing failed: " ++ Parser.deadEndsToString e)
 
                     Ok expr ->
                         succeed expr
@@ -206,7 +206,7 @@ tableDecoder =
                         Just str ->
                             case Parser.run Parse.expression str of
                                 Err e ->
-                                    fail ("Parsing dice failed: " ++ Debug.toString e)
+                                    fail ("Parsing dice failed: " ++ Parser.deadEndsToString e)
 
                                 Ok d ->
                                     succeed (Just d)
@@ -332,7 +332,7 @@ parsedRowDecoder : RowParseResult -> Yaml.Decode.Decoder ParsedRow
 parsedRowDecoder parseResult =
     case parseResult of
         Err e ->
-            fail ("Parsing row failed: " ++ Debug.toString e)
+            fail ("Parsing row failed: " ++ Parser.deadEndsToString e)
 
         Ok r ->
             succeed r
